@@ -45,7 +45,7 @@
             </th>
           </tr>
         </thead>
-        <tbody class="datatable-body" v-if="this.quotaLength > 0 && !isLoading">
+        <tbody class="datatable-body" v-if="quotaLength > 0 && !isLoading">
           <tr
             class="datatable-row"
             v-for="key in filteredPersonIds"
@@ -96,6 +96,11 @@
                       person_id: key,
                       year: year,
                       month: month
+                    },
+                    query: {
+                      countMode: countMode,
+                      computeMode: computeMode,
+                      taskTypeId: taskTypeId
                     }
                   })
                 "
@@ -128,6 +133,11 @@
                       person_id: key,
                       year: year,
                       week: week
+                    },
+                    query: {
+                      countMode: countMode,
+                      computeMode: computeMode,
+                      taskTypeId: taskTypeId
                     }
                   })
                 "
@@ -162,6 +172,11 @@
                       year: year,
                       month: month,
                       day: day
+                    },
+                    query: {
+                      countMode: countMode,
+                      computeMode: computeMode,
+                      taskTypeId: taskTypeId
                     }
                   })
                 "
@@ -181,7 +196,7 @@
     </div>
     <div
       class="has-text-centered empty-quota"
-      v-if="this.quotaLength === 0 && !isLoading"
+      v-if="quotaLength === 0 && !isLoading"
     >
       <p class="info">{{ $t('quota.no_quota') }}</p>
     </div>
@@ -193,16 +208,18 @@
 <script>
 import moment from 'moment-timezone'
 import { mapGetters, mapActions } from 'vuex'
-import { episodifyRoute } from '@/lib/path'
-import PeopleAvatar from '@/components/widgets/PeopleAvatar'
-import TableInfo from '@/components/widgets/TableInfo'
+
 import { buildNameIndex, indexSearch } from '@/lib/indexing'
+import { episodifyRoute } from '@/lib/path'
 import {
   monthToString,
   getMonthRange,
   getWeekRange,
   getDayRange
 } from '@/lib/time'
+
+import PeopleAvatar from '@/components/widgets/PeopleAvatar.vue'
+import TableInfo from '@/components/widgets/TableInfo.vue'
 
 export default {
   name: 'quota',

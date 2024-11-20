@@ -42,7 +42,7 @@
           :key="status.id"
           class="status-line"
           @click="selectStatus(status)"
-          v-for="status in taskStatusList"
+          v-for="status in sortedTaskStatusList"
         >
           <span
             class="tag"
@@ -61,11 +61,13 @@
 </template>
 
 <script>
+import { ChevronDownIcon } from 'lucide-vue'
 import { mapGetters } from 'vuex'
-import { ChevronDownIcon } from 'vue-feather-icons'
 
 import colors from '@/lib/colors'
-import ComboboxMask from '@/components/widgets/ComboboxMask'
+import { sortTaskStatuses } from '@/lib/sorting'
+
+import ComboboxMask from '@/components/widgets/ComboboxMask.vue'
 
 export default {
   name: 'combobox-status',
@@ -113,6 +115,10 @@ export default {
     openTop: {
       default: false,
       type: Boolean
+    },
+    productionId: {
+      default: '',
+      type: String
     }
   },
 
@@ -121,7 +127,16 @@ export default {
   },
 
   computed: {
-    ...mapGetters(['isDarkTheme', 'taskStatusMap']),
+    ...mapGetters(['isDarkTheme', 'productionMap', 'taskStatusMap']),
+
+    sortedTaskStatusList() {
+      if (this.productionId) {
+        const production = this.productionMap.get(this.productionId)
+        return sortTaskStatuses(this.taskStatusList, production)
+      } else {
+        return this.taskStatusList
+      }
+    },
 
     currentStatus() {
       if (this.value) {
@@ -141,21 +156,21 @@ export default {
         background: this.colorOnly
           ? this.backgroundColor(this.currentStatus)
           : this.isDarkTheme
-          ? '#36393F'
-          : '#FEFEFE',
+            ? '#36393F'
+            : '#FEFEFE',
         color: this.colorOnly ? this.color(this.currentStatus) : 'inherit',
         'border-top-left-radius': this.colorOnly ? '20px' : '10px',
         'border-top-right-radius': this.colorOnly ? '0px' : '10px',
         'border-bottom-left-radius': this.showStatusList
           ? '0'
           : this.colorOnly
-          ? '20px'
-          : '10px',
+            ? '20px'
+            : '10px',
         'border-bottom-right-radius': this.showStatusList
           ? '0'
           : this.colorOnly
-          ? '0px'
-          : '10px'
+            ? '0px'
+            : '10px'
       }
     }
   },

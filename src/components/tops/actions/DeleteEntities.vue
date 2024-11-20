@@ -15,19 +15,13 @@
 </template>
 
 <script>
-import { mapGetters } from 'vuex'
-
-import Spinner from '@/components/widgets/Spinner'
+import Spinner from '@/components/widgets/Spinner.vue'
 
 export default {
   name: 'delete-entities',
 
   components: {
     Spinner
-  },
-
-  data() {
-    return {}
   },
 
   props: {
@@ -47,15 +41,7 @@ export default {
       default: '',
       type: String
     }
-  },
-
-  mounted() {},
-
-  computed: {
-    ...mapGetters([])
-  },
-
-  methods: {}
+  }
 }
 </script>
 

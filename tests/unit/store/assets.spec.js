@@ -262,7 +262,8 @@ describe('Assets store', () => {
         currentEpisode: 4,
         isTVShow: true,
         taskTypeMap: 5,
-        taskMap: 6
+        taskMap: 6,
+        assetTypeMap: new Map(),
       }
       const res1 = await store.actions.loadAssets(
         { commit: mockCommit, state, rootGetters })
@@ -274,8 +275,12 @@ describe('Assets store', () => {
         { commit: mockCommit, state, rootGetters })
       expect(res2).toEqual([])
       state.isAssetsLoading = false
-      const assets = [{ id: 456, type: 'asset' }]
+      const assets = [{
+        id: 456,
+        type: 'asset',
+      }]
       assetsApi.getAssets = vi.fn(() => Promise.resolve(assets))
+      assetsApi.getUsedSharedAssets = vi.fn(() => Promise.resolve([]))
       mockCommit = vi.fn()
       const res3 = await store.actions.loadAssets(
         { commit: mockCommit, state, rootGetters })
@@ -293,8 +298,9 @@ describe('Assets store', () => {
       /*
       mockCommit = vi.fn()
       assetsApi.getAssets = vi.fn(() => Promise.reject(new Error('error')))
+      assetsApi.getSharedAssets = vi.fn(() => Promise.resolve([]))
       const res5 = await store.actions.loadAssets(
-        { commit: mockCommit, state, rootGetters }, true)
+        { commit: mockCommit, state, rootGetters }, { all: true, withTasks: false })
       expect(mockCommit).toBeCalledTimes(2)
       expect(mockCommit).toHaveBeenNthCalledWith(1, LOAD_ASSETS_START)
       expect(mockCommit).toHaveBeenNthCalledWith(2, LOAD_ASSETS_ERROR)
@@ -771,6 +777,7 @@ describe('Assets store', () => {
         assetValidationColumns: 1,
         displayedAssets: 1,
         assetFilledColumns: 1,
+        assetSearchFilterGroups: 1,
         assetSearchQueries: 1,
         displayedAssetsCount: 100,
         displayedAssetsLength: 100,
@@ -784,9 +791,10 @@ describe('Assets store', () => {
       expect(state).toEqual({
         assetMap: new Map(),
         assetValidationColumns: [],
-        displayedAssets: [],
         assetFilledColumns: {},
+        assetSearchFilterGroups: [],
         assetSearchQueries: [],
+        displayedAssets: [],
         displayedAssetsCount: 0,
         displayedAssetsLength: 0,
         displayedAssetsTimeSpent: 0,
@@ -806,6 +814,7 @@ describe('Assets store', () => {
         assetValidationColumns: 1,
         displayedAssets: 1,
         assetFilledColumns: 1,
+        assetSearchFilterGroups: 1,
         assetSearchQueries: 1,
         displayedAssetsCount: 100,
         displayedAssetsLength: 100,
@@ -823,6 +832,7 @@ describe('Assets store', () => {
         assetValidationColumns: [],
         displayedAssets: [],
         assetFilledColumns: {},
+        assetSearchFilterGroups: [],
         assetSearchQueries: [],
         displayedAssetsCount: 0,
         displayedAssetsLength: 0,
@@ -896,6 +906,11 @@ describe('Assets store', () => {
           1: 'assetSearchQueries'
         }
       }
+      const userFilterGroups = {
+        asset: {
+          1: 'assetSearchFilterGroups'
+        }
+      }
       const personMap = new Map()
       const taskMap = new Map()
       const taskTypeMap = new Map()
@@ -903,6 +918,7 @@ describe('Assets store', () => {
         production,
         assets,
         userFilters,
+        userFilterGroups,
         personMap,
         taskMap,
         taskTypeMap
@@ -971,6 +987,7 @@ describe('Assets store', () => {
         isAssetTime: false,
         isAssetEstimation: false,
         isAssetDescription: true,
+        isAssetResolution: false,
         assetValidationColumns: [],
         nbValidationColumns: 0,
         displayedAssets: store.cache.assets,
@@ -998,6 +1015,7 @@ describe('Assets store', () => {
         displayedAssetsCount: 4,
         displayedAssetsLength: 2,
         displayedAssetsTimeSpent: 0,
+        assetSearchFilterGroups: 'assetSearchFilterGroups',
         assetSearchQueries: 'assetSearchQueries',
         assetMap: new Map(Object.entries({
           4: {
@@ -1487,7 +1505,8 @@ describe('Assets store', () => {
 
     test('SET_ASSET_SEARCH', () => {
       const state = {
-        assetSorting: { 123: 123 }
+        assetSorting: { 123: 123 },
+        displayedAssets: []
       }
       const payload = {
         sorting: 123,
@@ -1853,7 +1872,8 @@ describe('Assets store', () => {
     test('CHANGE_ASSET_SORT', () => {
       const state = {
         assetSorting: { 123: 123 },
-        assetSearchText: 'search'
+        assetSearchText: 'search',
+        displayedAssets: []
       }
       const payload = {
         sorting: { 123: 124 },
@@ -1961,6 +1981,7 @@ describe('Assets store', () => {
         assetFilledColumns: {},
         assetListScrollPosition: 0,
         assetMap: new Map(),
+        assetSearchFilterGroups: [],
         assetSearchQueries: [],
         assetSearchText: '',
         assetSelectionGrid: {},
@@ -1977,15 +1998,20 @@ describe('Assets store', () => {
         displayedAssetsCount: 0,
         displayedAssetsLength: 0,
         displayedAssetsTimeSpent: 0,
+        displayedSharedAssets: [],
         filteredAssets: [],
         isAssetDescription: false,
         isAssetEstimation: false,
         isAssetTime: false,
+        isAssetResolution: false,
         isAssetsLoading: false,
         isAssetsLoadingError: false,
         nbValidationColumns: 0,
         personTasks: [],
-        selectedAssets: new Map()
+        sharedAssets: [],
+        sharedAssetSearchText: '',
+        selectedAssets: new Map(),
+        unsharedAssets: [],
       })
     })
 

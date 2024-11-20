@@ -7,19 +7,19 @@
             <th scope="col" class="name datatable-row-header">
               {{ $t('people.list.name') }}
             </th>
-            <th scope="col" class="email">
+            <th scope="col" class="email" v-if="isCurrentUserManager">
               {{ $t('people.list.email') }}
             </th>
-            <th scope="col" class="phone">
-              {{ $t('people.list.phone') }}
+            <th scope="col" class="contract" v-if="isCurrentUserManager">
+              {{ $t('people.list.contract') }}
             </th>
             <th scope="col" class="role">
               {{ $t('people.list.role') }}
             </th>
-            <th scope="col" class="departments">
+            <th scope="col">
               {{ $t('people.list.departments') }}
             </th>
-            <th scope="col" class="actions"></th>
+            <th scope="col" class="actions" v-if="isCurrentUserManager"></th>
           </tr>
         </thead>
         <tbody class="datatable-body" v-if="!isEmpty">
@@ -28,19 +28,23 @@
               class="name datatable-row-header"
               :person="person"
             />
-            <td class="email">{{ person.email }}</td>
-            <td class="phone">{{ person.phone }}</td>
-            <td class="role">{{ $t('people.role.' + person.role) }}</td>
-            <department-names-cell
-              class="departemnts"
-              :departments="person.departments"
-            />
-            <td class="actions" v-if="isCurrentUserAdmin">
-              <button class="button" @click="removePerson(person)">
+            <td class="email" v-if="isCurrentUserManager">
+              {{ person.email }}
+            </td>
+            <td class="contract" v-if="isCurrentUserManager">
+              {{ $t('people.contract.' + person.contract_type) }}
+            </td>
+            <td class="role">{{ $t(`people.role.${person.role}`) }}</td>
+            <department-names-cell :departments="person.departments" />
+            <td class="actions has-text-right" v-if="isCurrentUserManager">
+              <button
+                class="button"
+                @click="removePerson(person)"
+                v-if="isCurrentUserAdmin"
+              >
                 {{ $t('main.remove') }}
               </button>
             </td>
-            <td class="actions" v-else></td>
           </tr>
         </tbody>
       </table>
@@ -50,7 +54,7 @@
       {{ $t('people.empty_team') }}
     </p>
 
-    <p class="has-text-centered footer-info">
+    <p class="has-text-centered footer-info" v-else>
       {{ entries.length }} {{ $tc('people.persons', entries.length) }}
     </p>
   </div>
@@ -58,23 +62,30 @@
 
 <script>
 import { mapGetters, mapActions } from 'vuex'
-import DepartmentNamesCell from '@/components/cells/DepartmentNamesCell'
-import PeopleNameCell from '@/components/cells/PeopleNameCell'
+
+import DepartmentNamesCell from '@/components/cells/DepartmentNamesCell.vue'
+import PeopleNameCell from '@/components/cells/PeopleNameCell.vue'
 
 export default {
   name: 'production-team-list',
+
   components: {
     DepartmentNamesCell,
     PeopleNameCell
   },
 
-  props: ['entries'],
+  props: {
+    entries: {
+      type: Array,
+      default: () => []
+    }
+  },
 
   computed: {
-    ...mapGetters(['isCurrentUserAdmin']),
+    ...mapGetters(['isCurrentUserAdmin', 'isCurrentUserManager']),
 
     isEmpty() {
-      return !this.entries || this.entries.length === 0
+      return !this.entries?.length
     }
   },
 
@@ -115,5 +126,9 @@ export default {
 
 .data-list {
   margin-top: 2em;
+}
+
+.footer-info {
+  color: var(--text);
 }
 </style>

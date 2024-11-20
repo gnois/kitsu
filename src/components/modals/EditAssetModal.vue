@@ -9,14 +9,14 @@
 
     <div class="modal-content">
       <div class="box">
-        <h1 class="title" v-if="assetToEdit && this.assetToEdit.id">
+        <h1 class="title" v-if="assetToEdit && assetToEdit.id">
           {{ $t('assets.edit_title') }} {{ assetToEdit.name }}
         </h1>
         <h1 class="title" v-else>
           {{ $t('assets.new_asset') }}
         </h1>
 
-        <form v-on:submit.prevent>
+        <form @submit.prevent>
           <combobox
             :label="$t('assets.fields.type')"
             :options="productionAssetTypeOptions"
@@ -31,15 +31,20 @@
           <text-field
             ref="nameField"
             :label="$t('assets.fields.name')"
-            v-model="form.name"
+            v-model.trim="form.name"
             @enter="runConfirmation"
             v-focus
+          />
+          <text-field
+            ref="resolutionField"
+            :label="$t('shots.fields.resolution')"
+            v-model="form.data.resolution"
+            @enter="runConfirmation"
           />
           <textarea-field
             ref="descriptionField"
             :label="$t('assets.fields.description')"
             v-model="form.description"
-            v-focus
           />
           <metadata-field
             :key="descriptor.id"
@@ -50,6 +55,11 @@
             v-for="descriptor in assetMetadataDescriptors"
             v-if="assetToEdit"
           />
+          <combobox-boolean
+            :label="$t('assets.fields.shared')"
+            v-model="form.is_shared"
+            @enter="runConfirmation"
+          />
         </form>
 
         <div class="has-text-right">
@@ -59,7 +69,7 @@
               'is-primary': true,
               'is-loading': isLoadingStay
             }"
-            :disabled="this.form.name && this.form.name.length === 0"
+            :disabled="form.name && form.name.length === 0"
             @click="confirmAndStayClicked"
             v-if="!assetToEdit || !assetToEdit.id"
           >
@@ -71,7 +81,7 @@
               'is-primary': true,
               'is-loading': isLoading
             }"
-            :disabled="this.form.name && this.form.name.length === 0"
+            :disabled="form.name && form.name.length === 0"
             @click="confirmClicked"
           >
             {{ $t('main.confirmation') }}
@@ -92,20 +102,24 @@
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
+import { mapGetters } from 'vuex'
+
 import { modalMixin } from '@/components/modals/base_modal'
 
-import Combobox from '@/components/widgets/Combobox'
-import MetadataField from '@/components/widgets/MetadataField'
-import TextField from '@/components/widgets/TextField'
-import TextareaField from '@/components/widgets/TextareaField'
+import Combobox from '@/components/widgets/Combobox.vue'
+import ComboboxBoolean from '@/components/widgets/ComboboxBoolean.vue'
+import MetadataField from '@/components/widgets/MetadataField.vue'
+import TextField from '@/components/widgets/TextField.vue'
+import TextareaField from '@/components/widgets/TextareaField.vue'
 
 export default {
   name: 'edit-asset-modal',
+
   mixins: [modalMixin],
 
   components: {
     Combobox,
+    ComboboxBoolean,
     MetadataField,
     TextField,
     TextareaField
@@ -148,7 +162,10 @@ export default {
         name: '',
         description: '',
         source_id: null,
-        data: {}
+        data: {
+          resolution: ''
+        },
+        is_shared: 'false'
       },
       assetSuccessText: ''
     }
@@ -174,6 +191,10 @@ export default {
       'openProductions'
     ]),
 
+    resolution() {
+      return this.assetToEdit.data?.resolution || ''
+    },
+
     episodeOptions() {
       const options = this.episodes.map(episode => {
         return {
@@ -190,8 +211,6 @@ export default {
   },
 
   methods: {
-    ...mapActions([]),
-
     runConfirmation() {
       if (this.form.name.length > 0) {
         if (this.isEditing()) {
@@ -207,11 +226,17 @@ export default {
     },
 
     confirmAndStayClicked() {
-      this.$emit('confirmAndStay', this.form)
+      this.$emit('confirmAndStay', {
+        ...this.form,
+        is_shared: this.form.is_shared === 'true'
+      })
     },
 
     confirmClicked() {
-      this.$emit('confirm', this.form)
+      this.$emit('confirm', {
+        ...this.form,
+        is_shared: this.form.is_shared === 'true'
+      })
     },
 
     isEditing() {
@@ -248,6 +273,7 @@ export default {
           ? this.currentEpisode.id
           : null
         this.form.data = {}
+        this.form.is_shared = 'false'
       } else {
         const entityTypeId = this.getEntityTypeIdDefaultValue()
         this.form = {
@@ -256,7 +282,12 @@ export default {
           name: this.assetToEdit.name,
           description: this.assetToEdit.description,
           source_id: this.assetToEdit.source_id || this.assetToEdit.episode_id,
-          data: { ...this.assetToEdit.data } || {}
+          data:
+            {
+              ...this.assetToEdit.data,
+              resolution: this.assetToEdit.data.resolution || ''
+            } || {},
+          is_shared: String(this.assetToEdit.is_shared === true)
         }
       }
     }
@@ -287,6 +318,11 @@ export default {
           this.$refs.nameField.focus()
         }, 100)
       }
+    },
+
+    currentProduction() {
+      this.form.entity_type_id = null
+      this.resetForm()
     }
   }
 }

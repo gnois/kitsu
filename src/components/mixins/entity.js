@@ -1,28 +1,33 @@
+import moment from 'moment'
+import { mapGetters, mapActions } from 'vuex'
+
 import {
+  daysToMinutes,
+  getBusinessDays,
   getFirstStartDate,
   getLastEndDate,
   parseDate,
   parseSimpleDate
 } from '@/lib/time'
-import moment from 'moment'
+import stringHelpers from '@/lib/string'
 
 /*
- * Common functions to shot, asset and edit pages.
+ * Common functions for shot, asset, edit, sequncen and edit pages.
  */
 export const entityMixin = {
   data() {
     return {
-      currentSection: 'Casting',
+      currentSection: 'infos',
       zoomLevel: 1,
       entityNavOptions: [
+        { label: 'Infos', value: 'infos' },
+        { label: 'Chat', value: 'chat' },
         { label: 'Casting', value: 'casting' },
         { label: 'Schedule', value: 'schedule' },
         { label: 'Preview Files', value: 'preview-files' },
-        { label: 'Activity', value: 'activity' },
         { label: 'Timelog', value: 'time-logs' }
       ],
       zoomOptions: [
-        { label: 'Week', value: 0 },
         { label: '1', value: 1 },
         { label: '2', value: 2 },
         { label: '3', value: 3 }
@@ -30,13 +35,18 @@ export const entityMixin = {
     }
   },
 
-  created() {},
-
-  mounted() {},
-
-  beforeDestroy() {},
-
   computed: {
+    ...mapGetters(['organisation']),
+
+    entityTabs() {
+      return this.entityNavOptions.map(option => {
+        return {
+          label: option.label,
+          name: option.value
+        }
+      })
+    },
+
     thumbnailPath() {
       const previewId = this.currentEntity.preview_file_id
       return `/api/pictures/originals/preview-files/${previewId}.png`
@@ -107,7 +117,7 @@ export const entityMixin = {
         expanded: true,
         loading: false,
         children: [],
-        editable: false
+        editable: true
       }
       const limitStartDate = moment()
       const children = this.currentTasks
@@ -152,7 +162,7 @@ export const entityMixin = {
             expanded: false,
             loading: false,
             man_days: estimation,
-            editable: false,
+            editable: true,
             unresizable: false,
             parentElement: rootElement,
             color: taskType.color,
@@ -177,6 +187,8 @@ export const entityMixin = {
   },
 
   methods: {
+    ...mapActions(['addSelectedTask', 'clearSelectedTasks', 'updateTask']),
+
     changeTab(tab) {
       this.selectedTab = tab
     },
@@ -186,22 +198,58 @@ export const entityMixin = {
     },
 
     onTaskSelected(task) {
+      this.clearSelectedTasks()
       if (!this.currentTask || this.currentTask.id !== task.id) {
+        this.addSelectedTask(task)
         this.currentTask = task
       } else {
         this.currentTask = null
+      }
+    },
+
+    saveTaskScheduleItem(item) {
+      const daysLength = getBusinessDays(item.startDate, item.endDate)
+      const estimation = daysToMinutes(this.organisation, daysLength)
+      item.man_days = estimation
+      if (item.startDate && item.endDate) {
+        this.updateTask({
+          taskId: item.id,
+          data: {
+            estimation,
+            start_date: item.startDate.format('YYYY-MM-DD'),
+            due_date: item.endDate.format('YYYY-MM-DD')
+          }
+        })
       }
     }
   },
 
   watch: {
+    $route() {
+      const entityId = this.route.params[`${this.type}_id`]
+      const currentEntity =
+        this[`current${stringHelpers.capitalize(this.type)}`]
+      if (currentEntity && currentEntity !== entityId) {
+        this.init()
+      }
+      this.currentSection = this.route.query.section || 'infos'
+    },
+
     currentSection() {
-      this.$router.push({
-        query: { section: this.currentSection }
-      })
-      const schedule = this.$refs['schedule-widget']
-      if (this.currentSection === 'schedule' && schedule) {
-        schedule.scrollToToday()
+      if (this.currentSection === 'schedule' && this.scheduleItems.length > 0) {
+        if (this.$refs['schedule-widget']) {
+          this.$refs['schedule-widget'].scrollToDate(
+            this.scheduleItems[0].startDate
+          )
+        }
+      }
+    },
+
+    zoomLevel() {
+      if (this.$refs['schedule-widget']) {
+        this.$refs['schedule-widget'].scrollToDate(
+          this.scheduleItems[0].startDate
+        )
       }
     }
   }

@@ -65,36 +65,54 @@
               'for-client': playlist.for_client || false,
               selected: playlist.id === currentPlaylist.id
             }"
-            :style="playlistElementStyle(playlist)"
             v-for="playlist in playlists"
           >
-            <div v-if="!isListToggled">
-              <span>
-                {{ playlist.name }}
-              </span>
-              <span class="playlist-date" title="last modified">
-                {{ $t('playlists.updated_at') }}
-                {{ formatDate(playlist.updated_at) }}
-              </span>
-            </div>
-            <div class="has-text-centered" v-else>
-              <light-entity-thumbnail
-                :preview-file-id="playlist.first_preview_file_id"
-                type="previews"
-                width="38px"
-                height="30px"
-                max-width="38px"
-                max-height="30px"
-                empty-width="38px"
-                empty-height="30px"
-                :title="playlist.name"
-              />
+            <div
+              class="playlist-item-content"
+              :style="playlistElementStyle(playlist)"
+            >
+              <div class="flexrow" v-if="!isListToggled">
+                <light-entity-thumbnail
+                  class="flerxow-item playlist-thumbnail"
+                  :preview-file-id="playlist.first_preview_file_id"
+                  type="previews"
+                  width="38px"
+                  height="30px"
+                  max-width="38px"
+                  max-height="30px"
+                  empty-width="38px"
+                  empty-height="30px"
+                  :title="playlist.name"
+                  with-link="false"
+                />
+                <div class="flerxow-item ml05">
+                  {{ playlist.name }}
+                  <span class="playlist-date">
+                    {{ $t('playlists.updated_at') }}
+                    {{ formatDate(playlist.updated_at) }}
+                  </span>
+                </div>
+              </div>
+              <div class="has-text-centered" v-else>
+                <light-entity-thumbnail
+                  :preview-file-id="playlist.first_preview_file_id"
+                  type="previews"
+                  width="38px"
+                  height="30px"
+                  max-width="38px"
+                  max-height="30px"
+                  empty-width="38px"
+                  empty-height="30px"
+                  :title="playlist.name"
+                  v-if="playlist.first_preview_file_id"
+                />
+              </div>
             </div>
           </router-link>
         </div>
         <spinner class="mt2" v-else />
         <error-text
-          text="$t('playlists.loading_error')"
+          :text="$t('playlists.loading_error')"
           v-if="errors.playlistLoading"
         />
       </div>
@@ -191,6 +209,7 @@
           @annotation-changed="onAnnotationChanged"
           @for-client-changed="onForClientChanged"
           @annotations-refreshed="onAnnotationsRefreshed"
+          @new-entity-dropped="onNewEntityDropped"
         />
 
         <div
@@ -221,7 +240,7 @@
               <button-simple
                 class="flexrow-item"
                 :title="$t('entities.build_filter.title')"
-                icon="funnel"
+                icon="filter"
                 @click="modals.isBuildFilterDisplayed = true"
               />
               <button
@@ -241,7 +260,7 @@
                 :class="{
                   button: true,
                   'add-sequence': true,
-                  'is-loading': this.loading.addDaily
+                  'is-loading': loading.addDaily
                 }"
                 :disabled="isAdditionLoading"
                 @click="addDailyPending"
@@ -253,7 +272,7 @@
                 :class="{
                   button: true,
                   'add-sequence': true,
-                  'is-loading': this.loading.addEpisode
+                  'is-loading': loading.addEpisode
                 }"
                 :disabled="isAdditionLoading"
                 @click="addEpisodePending"
@@ -265,7 +284,7 @@
                 :class="{
                   button: true,
                   'add-sequence': true,
-                  'is-loading': this.loading.addMovie
+                  'is-loading': loading.addMovie
                 }"
                 :disabled="isAdditionLoading"
                 @click="addMovie"
@@ -370,33 +389,40 @@
                   </button>
                 </h2>
                 <div class="addition-entities">
-                  <div
-                    :class="{
-                      'addition-shot': true,
-                      playlisted: currentEntities[shot.id] !== undefined
-                    }"
+                  <drag
                     :key="shot.id"
-                    @click.prevent="addEntityToPlaylist(shot)"
+                    :transfer-data="shot.id"
                     v-for="shot in sequenceShots.filter(s => !s.canceled)"
                   >
-                    <light-entity-thumbnail
-                      :preview-file-id="shot.preview_file_id"
-                      width="150px"
-                      height="100px"
-                    />
-                    <div>
-                      <span
-                        :title="getTaskStatus(shot).name"
-                        :style="{
-                          color: getTaskStatus(shot).color
-                        }"
-                        v-if="currentPlaylist.task_type_id"
-                      >
-                        &bullet;
-                      </span>
-                      <span class="playlisted-shot-name">{{ shot.name }}</span>
+                    <div
+                      :class="{
+                        'addition-shot': true,
+                        playlisted: currentEntities[shot.id] !== undefined
+                      }"
+                      :transfer-data="shot.id"
+                      @click.prevent="addEntityToPlaylist(shot)"
+                    >
+                      <light-entity-thumbnail
+                        :preview-file-id="shot.preview_file_id"
+                        width="150px"
+                        height="100px"
+                      />
+                      <div>
+                        <span
+                          :title="getTaskStatus(shot).name"
+                          :style="{
+                            color: getTaskStatus(shot).color
+                          }"
+                          v-if="currentPlaylist.task_type_id"
+                        >
+                          &bullet;
+                        </span>
+                        <span class="playlisted-shot-name">{{
+                          shot.name
+                        }}</span>
+                      </div>
                     </div>
-                  </div>
+                  </drag>
                 </div>
               </div>
             </div>
@@ -430,7 +456,7 @@ import Vue from 'vue/dist/vue'
 import firstBy from 'thenby'
 import moment from 'moment-timezone'
 import { mapGetters, mapActions } from 'vuex'
-import { PlusIcon, XIcon } from 'vue-feather-icons'
+import { PlusIcon, XIcon } from 'lucide-vue'
 
 import { DEFAULT_NB_FRAMES_PICTURE } from '@/lib/playlist'
 import { formatDate } from '@/lib/time'
@@ -438,21 +464,21 @@ import { getPlaylistPath } from '@/lib/path'
 import { updateModelFromList, removeModelFromList } from '@/lib/models'
 import { sortShots } from '@/lib/sorting'
 
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import BuildFilterModal from '@/components/modals/BuildFilterModal'
-import Combobox from '@/components/widgets/Combobox'
-import ComboboxTaskType from '@/components/widgets/ComboboxTaskType'
-import EditPlaylistModal from '@/components/modals/EditPlaylistModal'
-import ErrorText from '@/components/widgets/ErrorText'
-import LightEntityThumbnail from '@/components/widgets/LightEntityThumbnail'
-import PageSubtitle from '@/components/widgets/PageSubtitle'
-import PlaylistPlayer from '@/components/pages/playlists/PlaylistPlayer'
-import SearchField from '@/components/widgets/SearchField'
-import Spinner from '@/components/widgets/Spinner'
-import TaskTypeName from '@/components/widgets/TaskTypeName'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import BuildFilterModal from '@/components/modals/BuildFilterModal.vue'
+import Combobox from '@/components/widgets/Combobox.vue'
+import ComboboxTaskType from '@/components/widgets/ComboboxTaskType.vue'
+import EditPlaylistModal from '@/components/modals/EditPlaylistModal.vue'
+import ErrorText from '@/components/widgets/ErrorText.vue'
+import LightEntityThumbnail from '@/components/widgets/LightEntityThumbnail.vue'
+import PageSubtitle from '@/components/widgets/PageSubtitle.vue'
+import PlaylistPlayer from '@/components/pages/playlists/PlaylistPlayer.vue'
+import SearchField from '@/components/widgets/SearchField.vue'
+import Spinner from '@/components/widgets/Spinner.vue'
+import TaskTypeName from '@/components/widgets/TaskTypeName.vue'
 
 export default {
-  name: 'productions',
+  name: 'playlist',
 
   components: {
     BuildFilterModal,
@@ -493,7 +519,6 @@ export default {
       previewFileEntityMap: new Map(),
       modals: {
         isBuildFilterDisplayed: false,
-        isDeleteDisplayed: false,
         isEditDisplayed: false
       },
       loading: {
@@ -503,16 +528,13 @@ export default {
         addMovie: false,
         addSequence: false,
         addWeekly: false,
-        deletePlaylist: false,
         editPlaylist: false,
         playlist: false,
         playlists: false,
         playlistsInit: true
       },
       errors: {
-        addPlaylist: false,
         editPlaylist: false,
-        deletePlaylist: false,
         playlistLoading: false
       }
     }
@@ -629,7 +651,6 @@ export default {
 
   methods: {
     ...mapActions([
-      'addNewBuildJob',
       'pushEntityToPlaylist',
       'changePlaylistOrder',
       'changePlaylistPreview',
@@ -644,14 +665,11 @@ export default {
       'loadEntityPreviewFiles',
       'loadShots',
       'loadAssets',
-      'markBuildJobAsDone',
       'newPlaylist',
       'refreshPlaylist',
       'removeEntityPreviewFromPlaylist',
-      'removeBuildJobFromList',
       'resetSequences',
       'setAssetSearch',
-      'setCurrentEpisode',
       'setSequenceSearch',
       'setShotSearch',
       'updatePreviewAnnotation'
@@ -673,17 +691,21 @@ export default {
     },
 
     playlistElementStyle(playlist) {
+      if (this.isListToggled) {
+        return
+      }
       const taskType = this.taskTypeMap.get(playlist.task_type_id)
-      const color = taskType ? taskType.color : 'transparent'
+      const color = taskType?.color || 'transparent'
       return {
-        'border-left': '2px solid ' + color
+        'border-left': `4px solid ${color}`
       }
     },
 
     getTaskStatus(entity) {
-      entity = this.shotMap.get(entity.id)
-      if (!entity) entity = this.assetMap.get(entity.id)
-      if (!entity) return {}
+      let entityWithTasks = this.shotMap.get(entity.id)
+      if (!entityWithTasks) entityWithTasks = this.assetMap.get(entity.id)
+      if (!entityWithTasks) entityWithTasks = this.sequenceMap.get(entity.id)
+      if (!entityWithTasks) return {}
 
       const taskId = entity.validations.get(this.currentPlaylist.task_type_id)
       if (taskId) {
@@ -849,6 +871,14 @@ export default {
           preview_file_id: entityInfo.preview_file_id || entity.preview_file_id,
           preview_file_extension:
             entityInfo.preview_file_extension || entity.preview_file_extension,
+          preview_file_revision:
+            entityInfo.preview_file_revision || entity.preview_file_revision,
+          preview_file_width:
+            entityInfo.preview_file_width || entity.preview_file_width,
+          preview_file_height:
+            entityInfo.preview_file_height || entity.preview_file_height,
+          preview_file_duration:
+            entityInfo.preview_file_duration || entity.preview_file_duration,
           preview_file_task_id:
             entityInfo.task_id ||
             entityInfo.preview_file_task_id ||
@@ -900,12 +930,14 @@ export default {
       }
     },
 
-    addEntity(entity) {
+    addEntity(entity, scrollRight = true) {
       return this.loadEntityPreviewFiles(entity)
         .then(previewFiles => {
           return this.addToStorePlaylistAndSave(previewFiles, entity)
         })
-        .then(this.addToPlayerPlaylist)
+        .then(entity => {
+          this.addToPlayerPlaylist(entity, scrollRight)
+        })
         .catch(err => console.error(err))
     },
 
@@ -917,18 +949,38 @@ export default {
       })
     },
 
-    addToPlayerPlaylist(entity) {
+    addToPlayerPlaylist(entity, scrollRight = true) {
       const playlistEntity = this.convertEntityToPlaylistFormat(entity)
       Vue.set(this.currentEntities, playlistEntity.id, playlistEntity)
       this.playlistPlayer.entityList.push(playlistEntity)
-      this.$nextTick(() => {
-        this.playlistPlayer.scrollToRight()
-      })
+      if (scrollRight) {
+        this.$nextTick(() => {
+          this.playlistPlayer.scrollToRight()
+        })
+      }
     },
 
     addEntityToPlaylist(entity) {
       if (!this.currentEntities[entity.id]) {
         this.addEntity(entity).then(this.playlistPlayer.scrollToRight())
+      }
+    },
+
+    onNewEntityDropped(info) {
+      let entity = null
+      if (this.isAssetPlaylist) {
+        entity = this.assetMap.get(info.after)
+      } else if (this.isSequencePlaylist) {
+        entity = this.sequenceMap.get(info.after)
+      } else {
+        entity = this.shotMap.get(info.after)
+      }
+
+      if (entity && !this.currentEntities[entity.id]) {
+        const notScrollRight = false
+        this.addEntity(entity, notScrollRight).then(() => {
+          this.playlistPlayer.onEntityDropped(info)
+        })
       }
     },
 
@@ -1151,10 +1203,13 @@ export default {
           task_type_id: form.task_type_id
         },
         callback: (err, playlist) => {
-          if (err) this.errors.editPlaylist = true
+          if (err) {
+            this.errors.editPlaylist = true
+          } else {
+            this.modals.isEditDisplayed = false
+            Object.assign(this.currentPlaylist, playlist)
+          }
           this.loading.editPlaylist = false
-          this.modals.isEditDisplayed = false
-          Object.assign(this.currentPlaylist, playlist)
         }
       })
     },
@@ -1222,12 +1277,13 @@ export default {
         name: `${moment().format('YYYY-MM-DD HH:mm:ss')}`,
         for_client: false
       }
-      this.$refs['edit-playlist-modal'] = true
+      this.errors.editPlaylist = false
       this.modals.isEditDisplayed = true
     },
 
     showEditModal() {
       this.playlistToEdit = this.currentPlaylist
+      this.errors.editPlaylist = false
       this.modals.isEditDisplayed = true
     },
 
@@ -1300,8 +1356,6 @@ export default {
       }
     },
 
-    playlists() {},
-
     currentSort() {
       localStorage.setItem('playlist-sort', this.currentSort)
       this.loading.playlists = true
@@ -1312,7 +1366,7 @@ export default {
     },
 
     isListToggled() {
-      this.playlistPlayer.onWindowResize()
+      this.playlistPlayer?.onWindowResize()
     },
 
     taskTypeId() {
@@ -1385,19 +1439,15 @@ export default {
 .dark {
   .playlist-item {
     background: $dark-grey-lightmore;
-    box-shadow: 0px 0px 6px #333;
+    box-shadow: 0 0 6px #333;
     border-color: $dark-grey;
     color: $white-grey;
-
-    &.selected {
-      border-right: 3px solid $dark-green;
-    }
   }
 
   .playlist-list-column {
     background: $dark-grey-light;
     border-color: $dark-grey;
-    box-shadow: 0px 0px 6px #333;
+    box-shadow: 0 0 6px #333;
   }
 
   .playlist-column {
@@ -1421,7 +1471,7 @@ export default {
       overflow: hidden;
       background: $dark-grey-lightmore;
       border: 2px solid $dark-grey;
-      box-shadow: 0px 0px 6px #333;
+      box-shadow: 0 0 6px #333;
       margin-bottom: 1em;
 
       h3 {
@@ -1431,7 +1481,7 @@ export default {
   }
 
   span.thumbnail-picture {
-    box-shadow: 0px 0px 6px #333;
+    box-shadow: 0 0 6px #333;
   }
 }
 
@@ -1443,7 +1493,7 @@ export default {
 }
 
 .page .columns {
-  margin-top: 0px;
+  margin-top: 0;
   margin-bottom: 0;
   overflow-y: auto;
   flex: 1;
@@ -1453,18 +1503,18 @@ export default {
   max-width: 300px;
   background: #f4f5f9;
   overflow-y: auto;
-  padding: 1em 1em 1em 2em;
+  padding: 1em;
   border-right: 1px solid #ddd;
-  box-shadow: 0px 0px 6px #f0f0f0;
+  box-shadow: 0 0 6px #f0f0f0;
   z-index: 201;
 }
 
 .playlist-item {
   display: block;
   background: white;
-  border: 1px solid $white-grey;
+  border: 2px solid $white-grey;
   border-radius: 3px;
-  box-shadow: 0px 0px 6px #ddd;
+  box-shadow: 0 0 6px #ddd;
   color: $grey-strong;
   margin: 0.2em;
   padding: 0.4em;
@@ -1475,13 +1525,14 @@ export default {
   }
 
   &:hover {
-    transform: scale(1.03);
-    border-right: 2px solid $dark-purple;
+    transform: scale(1.02);
+    border: 2px solid var(--background-selectable);
   }
 }
 
 .playlist-item.selected {
-  border-right: 3px solid $light-green;
+  border: 2px solid var(--background-selected);
+  transform: scale(1.02);
 }
 
 .playlist-list-column .button {
@@ -1506,7 +1557,6 @@ export default {
   width: 170px;
   display: flex;
   flex-direction: column;
-  border: 0px solid transparent;
 
   a {
     margin: auto;
@@ -1528,7 +1578,7 @@ export default {
 }
 
 span.thumbnail-picture {
-  box-shadow: 0px 0px 6px #ddd;
+  box-shadow: 0 0 6px #ddd;
   margin-bottom: 2px;
 }
 
@@ -1603,6 +1653,11 @@ h2 {
   .playlist-item {
     padding: 0;
   }
+  .playlist-item-content {
+    height: 30px;
+    padding: 0;
+    border: 0;
+  }
 }
 
 .playlist-column.no-selection {
@@ -1625,7 +1680,7 @@ h2 {
     height: 320px;
     background: white;
     border: 2px solid $light-grey-light;
-    box-shadow: 0px 0px 6px #ddd;
+    box-shadow: 0 0 6px #ddd;
     border-radius: 1em;
     padding: 0;
     width: 100%;
@@ -1638,7 +1693,6 @@ h2 {
 
     &:hover {
       transform: scale(1.03);
-      border: 2px solid $dark-purple;
     }
 
     .playlist-infos {
@@ -1679,5 +1733,22 @@ h2 {
 
 .top-section {
   align-items: flex-start;
+}
+
+.thumbnail-picture,
+.playlist-thumbnail {
+  border-radius: 4px;
+}
+
+.playlist-item-content {
+  padding-left: 0.5em;
+  overflow-wrap: anywhere;
+
+  .flexrow {
+    align-items: flex-start;
+    .thumbnail-picture {
+      margin-top: 3px;
+    }
+  }
 }
 </style>

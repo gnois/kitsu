@@ -2,17 +2,8 @@ import client from '@/store/api/client'
 
 export default {
   getMilestones(production) {
-    return new Promise((resolve, reject) => {
-      if (production) {
-        const path = `/api/data/projects/${production.id}/milestones`
-        client.get(path, (err, milestones) => {
-          if (err) reject(err)
-          else resolve(milestones)
-        })
-      } else {
-        resolve([])
-      }
-    })
+    const path = `/api/data/projects/${production.id}/milestones`
+    return client.pget(path)
   },
 
   createMilestone(production, milestone) {
@@ -52,7 +43,7 @@ export default {
 
   createScheduleItem(scheduleItem) {
     if (!scheduleItem.endDate) {
-      scheduleItem.endDate = scheduleItem.startDate.add('days', 1).clone()
+      scheduleItem.endDate = scheduleItem.startDate.add(1, 'days').clone()
     }
     const manDays = scheduleItem.man_days
     const data = {
@@ -91,7 +82,7 @@ export default {
 
   updateScheduleItem(scheduleItem) {
     if (!scheduleItem.endDate) {
-      scheduleItem.endDate = scheduleItem.startDate.add('days', 1).clone()
+      scheduleItem.endDate = scheduleItem.startDate.add(1, 'days').clone()
     }
     const manDays = scheduleItem.man_days
     const data = {

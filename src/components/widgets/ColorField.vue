@@ -9,36 +9,31 @@
           color: true,
           selected: value === color
         }"
-        :style="{ 'border-color': color }"
-        v-for="(color, index) in colors"
+        :style="{ 'border-color': color + hexaOpacity }"
         @click="colorChanged(color)"
+        v-for="(color, index) in colors"
       >
-        <span :style="{ background: color }"> </span>
+        <span :style="{ background: color + hexaOpacity }"> </span>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
-
 export default {
-  name: 'text-field',
+  name: 'color-field',
+
   props: {
     label: {
       default: '',
       type: String
     },
+    hexaOpacity: {
+      default: 'FF',
+      type: String
+    },
     value: {
       default: '#999999',
-      type: String
-    },
-    placeholder: {
-      default: '',
-      type: String
-    },
-    type: {
-      default: 'text',
       type: String
     },
     colors: {
@@ -70,22 +65,15 @@ export default {
       ]
     }
   },
-  data() {
-    return {
-      selectedColor: '#999999'
-    }
-  },
-  computed: {
-    ...mapGetters([])
-  },
+
   methods: {
-    ...mapActions([]),
     colorChanged(color, index) {
       this.$emit('input', color)
     }
   }
 }
 </script>
+
 <style lang="scss" scoped>
 .colors {
   display: grid;

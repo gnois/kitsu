@@ -1,15 +1,17 @@
 <template>
   <div :class="{ field: withMargin }">
     <label class="label" v-if="label">{{ label }}</label>
-    <p class="control flexrow">
+    <p class="control">
       <datepicker
         wrapper-class="datepicker"
         :input-class="{
           'date-input': true,
           input: true,
+          invalid,
           short: shortDate
         }"
         :language="locale"
+        :disabled="disabled"
         :disabled-dates="disabledDates"
         :monday-first="true"
         format="yyyy-MM-dd"
@@ -19,7 +21,7 @@
       <span
         class="clear-button unselectable"
         @click="event => clearValue(event)"
-        v-show="localValue && canDelete"
+        v-if="localValue && canDelete && !disabled"
       >
         +
       </span>
@@ -28,14 +30,14 @@
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
+import { mapGetters } from 'vuex'
 import { en, fr } from 'vuejs-datepicker/dist/locale'
 import Datepicker from 'vuejs-datepicker'
 
 import { domMixin } from '@/components/mixins/dom'
 
 export default {
-  name: 'text-field',
+  name: 'date-field',
 
   components: {
     Datepicker
@@ -44,9 +46,21 @@ export default {
   mixins: [domMixin],
 
   props: {
+    canDelete: {
+      default: true,
+      type: Boolean
+    },
+    disabled: {
+      default: false,
+      type: Boolean
+    },
     disabledDates: {
       default: () => {},
       type: Object
+    },
+    invalid: {
+      default: false,
+      type: Boolean
     },
     label: {
       default: '',
@@ -57,12 +71,8 @@ export default {
       type: Boolean
     },
     value: {
-      default: new Date(),
+      default: () => new Date(),
       type: Date
-    },
-    canDelete: {
-      default: true,
-      type: Boolean
     },
     withMargin: {
       default: true,
@@ -93,8 +103,6 @@ export default {
   },
 
   methods: {
-    ...mapActions([]),
-
     clearValue(event) {
       this.pauseEvent(event)
       this.localValue = null
@@ -105,21 +113,20 @@ export default {
   watch: {
     value() {
       this.localValue = this.value
-    },
-    localValue() {}
+    }
   }
 }
 </script>
 <style lang="scss" scoped>
 .control {
-  position: relative;
+  display: inline-flex;
 }
 
 .clear-button {
   cursor: pointer;
   position: absolute;
   right: 5px;
-  top: 0px;
+  top: 0;
   color: $light-grey;
   transform: rotate(45deg);
 }

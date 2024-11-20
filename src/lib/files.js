@@ -1,10 +1,12 @@
 const ALL_EXTENSIONS = [
   'png',
   'jpg',
+  'kra',
   'mp4',
   'mov',
   'obj',
   'glb',
+  'gltf',
   'pdf',
   'ma',
   'mb',
@@ -24,21 +26,25 @@ const ALL_EXTENSIONS = [
   'ae',
   'fla',
   'flv',
+  'sai',
+  'sai2',
   'swf',
   'sbbkp',
   'wav',
   'mp3',
   'webm',
   'avi',
-  'clip'
+  'clip',
+  'mkv'
 ]
+const ALL_EXTENSIONS_STRING = ALL_EXTENSIONS.map(e => `.${e}`).join(',')
 
-const ALL_EXTENSIONS_STRING = ALL_EXTENSIONS.map(
-  extension => '.' + extension
-).join(',')
+const IMG_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'svg']
+const IMG_EXTENSIONS_STRING = IMG_EXTENSIONS.map(e => `.${e}`).join(',')
 
 export default {
-  IMG_EXTENSIONS: ['png', 'jpg', 'jpeg', 'gif', 'svg'],
+  ALL_EXTENSIONS,
   ALL_EXTENSIONS_STRING,
-  ALL_EXTENSIONS
+  IMG_EXTENSIONS,
+  IMG_EXTENSIONS_STRING
 }

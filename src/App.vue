@@ -11,7 +11,8 @@
     <router-view v-else />
 
     <preview-modal
-      :active="previewFileIdToShow.length > 0"
+      v-if="previewFileIdToShow"
+      active
       :preview-file-id="previewFileIdToShow"
       @cancel="() => $store.commit('HIDE_PREVIEW_FILE')"
     />
@@ -20,10 +21,13 @@
 
 <script>
 import { mapGetters, mapActions } from 'vuex'
-import PreviewModal from '@/components/modals/PreviewModal'
-import Spinner from '@/components/widgets/Spinner'
+
+import PreviewModal from '@/components/modals/PreviewModal.vue'
+import Spinner from '@/components/widgets/Spinner.vue'
+
 import crisp from '@/lib/crisp'
 import localPreferences from '@/lib/preferences'
+import sentry from '@/lib/sentry'
 
 export default {
   name: 'app',
@@ -43,13 +47,11 @@ export default {
       'episodeMap',
       'isCurrentUserAdmin',
       'isDataLoading',
-      'isPreviewFileDisplayed',
       'isDarkTheme',
-      'isLoginLoading',
       'isSavingCommentPreview',
       'isTVShow',
+      'mainConfig',
       'previewFileIdToShow',
-      'route',
       'personMap',
       'productionMap',
       'sequenceMap',
@@ -61,28 +63,11 @@ export default {
     ])
   },
 
-  mounted() {
-    if (localStorage.getItem('dark-theme') === 'true' && !this.isDarkTheme) {
-      this.$store.commit('TOGGLE_DARK_THEME')
-      document.documentElement.style.background = '#36393F'
-      document.body.style.background = '#36393F'
-    } else {
-      document.documentElement.style.background = '#FFF'
-      document.body.style.background = '#FFF'
-    }
-    const supportChat = localPreferences.getBoolPreference('support:show', true)
-    this.setSupportChat(supportChat)
-    crisp.init(supportChat)
-    this.setMainConfig()
-  },
-
-  metaInfo: {
-    link: [
-      {
-        rel: 'icon',
-        href: '/static/favicon.ico'
-      }
-    ]
+  async mounted() {
+    const config = await this.setMainConfig()
+    this.setupDarkTheme()
+    this.setupCrisp(config)
+    this.setupSentry(config)
   },
 
   methods: {
@@ -96,14 +81,12 @@ export default {
       'loadEpisode',
       'loadOpenProductions',
       'loadPerson',
-      'loadPersonTasks',
       'loadProduction',
       'loadSequence',
       'loadShot',
       'loadTaskStatus',
       'loadTaskType',
       'refreshMetadataDescriptor',
-      'removeAsset',
       'setMainConfig',
       'setSupportChat'
     ]),
@@ -118,25 +101,63 @@ export default {
       } else {
         this.$store.commit('UNASSIGN_TASKS', selectedTaskIds)
       }
+    },
 
-      // for todo lists
-      if (this.route.path.indexOf(eventData.person_id) > 0) {
-        this.loadPersonTasks({
-          personId: eventData.person_id,
-          forced: true
+    setupDarkTheme() {
+      const darkTheme = localStorage.getItem('dark-theme')
+      const isDarkTheme =
+        darkTheme === 'true' ||
+        (darkTheme !== 'false' &&
+          Boolean(this.mainConfig?.dark_theme_by_default))
+      this.$store.commit('TOGGLE_DARK_THEME', isDarkTheme)
+    },
+
+    setupCrisp(config) {
+      if (config.crisp_token?.length) {
+        const supportChat = localPreferences.getBoolPreference(
+          'support:show',
+          true
+        )
+        this.setSupportChat(supportChat)
+        crisp.init(config.crisp_token)
+      }
+    },
+
+    setupSentry(config) {
+      if (config.sentry?.dsn?.length) {
+        sentry.init(this.$router, {
+          dsn: config.sentry.dsn,
+          sampleRate: config.sentry.sampleRate
         })
       }
     }
   },
 
   watch: {
-    isDarkTheme() {
-      if (this.isDarkTheme) {
-        document.documentElement.style.background = '#36393F'
-        document.body.style.background = '#36393F'
-      } else {
-        document.documentElement.style.background = '#FFF'
-        document.body.style.background = '#FFF'
+    isDarkTheme: {
+      immediate: true,
+      handler() {
+        const background = this.isDarkTheme ? '#36393F' : '#FFF'
+        document.documentElement.style.background = background
+        document.body.style.background = background
+      }
+    },
+
+    currentProduction: {
+      immediate: true,
+      handler() {
+        const userLocale = this.user?.locale.substring(0, 2)
+        const variant = this.currentProduction?.production_style
+        if (userLocale !== 'en') {
+          return
+        }
+        if (['nft', 'video-game'].includes(variant)) {
+          this.$i18n.silentFallbackWarn = true
+          this.$i18n.locale = `en_${variant}`
+        } else {
+          this.$i18n.silentFallbackWarn = false
+          this.$i18n.locale = 'en'
+        }
       }
     }
   },
@@ -166,8 +187,7 @@ export default {
       'sequence:new'(eventData) {
         if (
           !this.sequenceMap.get(eventData.sequence_id) &&
-          this.currentProduction &&
-          this.currentProduction.id === eventData.project_id
+          this.currentProduction?.id === eventData.project_id
         ) {
           this.loadSequence(eventData.sequence_id)
         }
@@ -188,8 +208,7 @@ export default {
       'edit:new'(eventData) {
         if (
           !this.editMap.get(eventData.edit_id) &&
-          this.currentProduction &&
-          this.currentProduction.id === eventData.project_id
+          this.currentProduction?.id === eventData.project_id
         ) {
           this.loadEdit(eventData.edit_id)
         }
@@ -210,8 +229,7 @@ export default {
       'episode:new'(eventData) {
         if (
           !this.episodeMap.get(eventData.episode_id) &&
-          this.currentProduction &&
-          this.currentProduction.id === eventData.project_id
+          this.currentProduction?.id === eventData.project_id
         ) {
           this.loadEpisode(eventData.episode_id)
         }
@@ -232,8 +250,7 @@ export default {
       'shot:new'(eventData) {
         if (
           !this.shotMap.get(eventData.shot_id) &&
-          this.currentProduction &&
-          this.currentProduction.id === eventData.project_id &&
+          this.currentProduction?.id === eventData.project_id &&
           (!this.isTVShow || this.currentEpisode.id === eventData.episode_id)
         ) {
           setTimeout(() => {
@@ -257,8 +274,7 @@ export default {
       'asset:new'(eventData) {
         if (
           !this.assetMap.get(eventData.asset_id) &&
-          this.currentProduction &&
-          this.currentProduction.id === eventData.project_id
+          this.currentProduction?.id === eventData.project_id
         ) {
           setTimeout(() => {
             this.loadAsset(eventData.asset_id)
@@ -358,7 +374,6 @@ export default {
       'person:delete'(eventData) {
         const person = this.personMap.get(eventData.person_id)
         if (person) {
-          this.$store.commit('DELETE_PEOPLE_START', person)
           this.$store.commit('DELETE_PEOPLE_END', person)
         }
       },
@@ -420,11 +435,15 @@ export default {
       },
 
       'metadata-descriptor:new'(eventData) {
-        this.refreshMetadataDescriptor(eventData.metadata_descriptor_id)
+        if (this.currentProduction?.id === eventData.project_id) {
+          this.refreshMetadataDescriptor(eventData.metadata_descriptor_id)
+        }
       },
 
       'metadata-descriptor:update'(eventData) {
-        this.refreshMetadataDescriptor(eventData.metadata_descriptor_id)
+        if (this.currentProduction?.id === eventData.project_id) {
+          this.refreshMetadataDescriptor(eventData.metadata_descriptor_id)
+        }
       },
 
       'metadata-descriptor:delete'(eventData) {
@@ -455,7 +474,7 @@ export default {
   font-family: Lato;
   font-style: normal;
   font-weight: 400;
-  src: url(./assets/fonts/Lato.woff2) format('woff2');
+  src: url('/fonts/Lato.woff2') format('woff2');
 }
 
 html {
@@ -631,24 +650,6 @@ body {
     background-color: #ccc;
   }
 
-  .tabs a {
-    color: $white-grey;
-  }
-
-  .tabs a:hover {
-    border-color: $white-grey;
-  }
-
-  .tabs li.is-active a:hover {
-    border-color: #00c252;
-    color: #00c252;
-  }
-
-  .tabs li.is-active a:hover {
-    border-color: #00c252;
-    color: #00c252;
-  }
-
   .search-queries .tag {
     color: #eee;
     background-color: #5e6169;
@@ -709,10 +710,6 @@ body {
   }
 } // End dark theme
 
-#app .router-link-active {
-  color: #00d1b2;
-}
-
 .loading-info {
   background: white;
 }
@@ -771,14 +768,32 @@ h2 {
 
 .avatar {
   border-radius: 50%;
-  color: white;
-}
+  color: $white;
 
-.avatar img {
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  margin-right: 0px;
+  a,
+  a:hover {
+    color: inherit;
+  }
+
+  img {
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    margin-right: 0;
+  }
+
+  &.bot::after {
+    content: 'bot';
+    color: $white;
+    position: absolute;
+    bottom: -4px;
+    font-size: 10px;
+    line-height: 10px;
+    padding: 1px 4px;
+    background-color: $grey-strong;
+    border: 1px solid $white;
+    border-radius: 3px;
+  }
 }
 
 .mention,
@@ -786,10 +801,36 @@ h2 {
   color: $blue;
 }
 
+.tags {
+  .tag {
+    background: var(--background-tag);
+    color: var(--text);
+
+    a {
+      color: var(--text);
+    }
+
+    .action {
+      cursor: pointer;
+      background: $light-grey;
+      color: white;
+
+      .dark & {
+        background: $dark-grey;
+      }
+
+      &:hover {
+        background: $dark-grey-lighter;
+      }
+    }
+  }
+}
+
 .timecode {
   border: 1px solid $blue;
   border-radius: 5px;
   color: $blue;
+  cursor: pointer;
   font-size: 0.9em;
   padding: 3px 4px;
 
@@ -860,7 +901,7 @@ a:hover {
 }
 
 .pa0 {
-  padding: 0em;
+  padding: 0;
 }
 
 .pa1 {
@@ -868,7 +909,7 @@ a:hover {
 }
 
 .pb0 {
-  padding-bottom: 0em;
+  padding-bottom: 0;
 }
 
 .pb1 {
@@ -876,7 +917,7 @@ a:hover {
 }
 
 .pt0 {
-  padding-top: 0em;
+  padding-top: 0;
 }
 
 .mauto {
@@ -892,7 +933,7 @@ a:hover {
 }
 
 .mr0 {
-  margin-right: 0em;
+  margin-right: 0;
 }
 
 .mr05 {
@@ -939,6 +980,10 @@ a:hover {
   flex: 1;
 }
 
+.nowrap {
+  white-space: nowrap;
+}
+
 .z300 {
   z-index: 300000;
 }
@@ -981,12 +1026,25 @@ input.input:focus {
   border-radius: 2em;
 }
 
-.datepicker .input.is-small {
-  font-size: 1em;
-  padding: 0.5em;
-  height: 2.3em;
-  width: 100px;
-  border-radius: 10px;
+.datepicker {
+  .input {
+    border-radius: 10px;
+
+    &::placeholder {
+      color: $light-grey;
+    }
+
+    &.is-small {
+      font-size: 1em;
+      padding: 0.5em;
+      height: 2.3em;
+      width: 100px;
+    }
+
+    &.invalid {
+      border-color: $red;
+    }
+  }
 }
 
 .button:focus {
@@ -1018,7 +1076,7 @@ input.input:focus {
   background: #67be4b;
 }
 
-input[type='checkbox'] {
+input[type='checkbox']:not([disabled]) {
   cursor: pointer;
 }
 
@@ -1055,13 +1113,37 @@ textarea.input:focus {
   color: #4a4a4a;
 }
 
+.button {
+  border-radius: 10px;
+  padding: 0 10px;
+
+  &:hover {
+    border: 1px solid var(--text);
+  }
+}
+
+.button .icon {
+  min-height: 18px;
+  min-width: 18px;
+  max-height: 18px;
+  min-width: 18px;
+}
+
+.preview-player .button .icon,
+.playlist-player .button .icon {
+  min-height: 14px;
+  min-width: 14px;
+  max-height: 14px;
+  min-width: 14px;
+}
+
 .main-button {
   border-radius: 5px;
   min-height: 2.6em;
   color: white;
   border-color: #5e60ba;
   padding: 12px 12px 12px 12px;
-  margin: 0.3em 0 0em 0;
+  margin: 0.3em 0 0 0;
   font-size: 1.4em;
   font-weight: 500;
   letter-spacing: 1px;
@@ -1101,7 +1183,7 @@ textarea.input:focus {
     }
 
     .button {
-      border-radius: 2em;
+      border-radius: 10px;
     }
   }
 }
@@ -1111,8 +1193,8 @@ textarea.input:focus {
   padding: 3em 2em 2em 2em;
   border-radius: 2px;
   box-shadow:
-    rgba(0, 0, 0, 0.14902) 0px 1px 1px 0px,
-    rgba(0, 0, 0, 0.09804) 0px 1px 2px 0px;
+    rgba(0, 0, 0, 0.14902) 0 1px 1px 0,
+    rgba(0, 0, 0, 0.09804) 0 1px 2px 0;
 }
 
 .box h1.title {
@@ -1135,15 +1217,15 @@ textarea.input:focus {
 }
 
 .button .icon.is-small:first-child:last-child {
-  margin-right: 0em;
+  margin-right: 0;
 }
 
 .actions .button .icon.is-small.icon-only:first-child:last-child {
-  margin-right: 0em;
+  margin-right: 0;
 }
 
 .actions .button .icon.is-small:first-child:last-child {
-  margin-right: 0em;
+  margin-right: 0;
 }
 
 .button .icon.is-small {
@@ -1167,20 +1249,6 @@ textarea.input:focus {
   margin-bottom: 2em;
   margin-left: 1em;
   max-width: 95%;
-}
-
-.query-list .tag {
-  margin-right: 1em;
-  margin-bottom: 0.2em;
-  border: 1px solid transparent;
-}
-
-.query-list .tag .delete {
-  transform: rotate(45deg) scale(0.7);
-}
-
-.query-list .tag:hover {
-  transform: scale(1.1);
 }
 
 .fixed-page {
@@ -1475,6 +1543,10 @@ tbody:last-child .empty-line:last-child {
     &:hover .header-icon {
       opacity: 1;
     }
+
+    .descriptor-name {
+      margin-right: 0;
+    }
   }
 
   .validation-cell,
@@ -1612,6 +1684,11 @@ tbody:last-child .empty-line:last-child {
   &:nth-child(even) .datatable-row-header {
     background-color: var(--background);
   }
+
+  &:hover,
+  &:hover .datatable-row-header {
+    background: var(--background-hover);
+  }
 }
 
 .datatable-row-header {
@@ -1671,6 +1748,67 @@ tbody:last-child .empty-line:last-child {
 
 .datatable tbody:first-of-type .datatable-type-header th::before {
   display: none;
+}
+
+th .input-editor,
+td .input-editor {
+  background: transparent;
+  border: 1px solid transparent;
+  color: $grey-strong;
+  height: 100%;
+  padding: 0.5rem;
+  width: 100%;
+  z-index: 100;
+
+  &:active,
+  &:focus,
+  &:hover {
+    background: transparent;
+    background: white;
+  }
+
+  &:active,
+  &:focus {
+    border: 1px solid $green;
+  }
+
+  &:hover {
+    border: 1px solid $light-green;
+  }
+
+  &:invalid,
+  &.error {
+    color: $red;
+  }
+}
+
+.dark {
+  th .input-editor,
+  td .select select,
+  td .input-editor {
+    color: $white;
+
+    option {
+      background: $dark-grey-light;
+      color: $white;
+    }
+
+    &:focus,
+    &:active,
+    &:hover {
+      background: $dark-grey-light;
+    }
+  }
+}
+
+td.frames,
+td.framein,
+td.frameout,
+td.max-retakes,
+td.resolution,
+td.fps {
+  height: 3.1rem;
+  padding: 0;
 }
 
 .resizable {
@@ -1737,9 +1875,6 @@ tbody:last-child .empty-line:last-child {
   cursor: pointer;
 }
 
-.side {
-}
-
 .menu-mask {
   position: fixed;
   background: blue;
@@ -1766,9 +1901,6 @@ tbody:last-child .empty-line:last-child {
   border: 1px solid #ccc;
 }
 
-.modal {
-}
-
 .modal-content {
   .button {
     margin-left: 0.5em;
@@ -1781,7 +1913,7 @@ tbody:last-child .empty-line:last-child {
 }
 
 .modal-content label.button {
-  margin-left: 0em;
+  margin-left: 0;
 }
 
 .modal-content .box p.text {
@@ -1835,18 +1967,34 @@ tbody:last-child .empty-line:last-child {
     background: var(--background-tag);
     border-left: 0.4em solid var(--background-hover);
   }
-}
 
-.main-column {
+  table tr:hover {
+    background: var(--background-hover);
+  }
+
+  table thead th {
+    color: inherit;
+  }
 }
 
 .playlist-column .video-player-box .video-js {
   margin: auto;
 }
 
+.tabs li a {
+  color: var(--text);
+
+  &:hover {
+    color: var(--text-selectable);
+    border-color: var(--text-selectable);
+  }
+}
+
 .tabs li.is-active a {
-  border-color: #00b242;
-  color: #00b242;
+  font-weight: bold;
+
+  color: var(--text-selected);
+  border-color: var(--text-selected);
 }
 
 .page .columns:last-child {
@@ -1860,6 +2008,11 @@ tbody:last-child .empty-line:last-child {
   width: 400px;
 }
 
+.left-side-column {
+  width: 300px;
+  max-width: 300px;
+}
+
 .empty-list {
   margin-top: 2em;
   font-size: 1.5em;
@@ -1867,7 +2020,7 @@ tbody:last-child .empty-line:last-child {
 
 .entity-thumbnail {
   border-radius: 0.5em;
-  box-shadow: 0px 0px 6px var(--box-shadow);
+  box-shadow: 0 0 6px var(--box-shadow);
   cursor: pointer;
   transition: transform ease 0.3s;
   max-width: 90px;
@@ -1907,7 +2060,7 @@ th.validation-cell {
 .block {
   background: var(--background-block);
   border-radius: 1em;
-  box-shadow: 0px 0px 6px var(--box-shadow);
+  box-shadow: 0 0 6px var(--box-shadow);
   color: var(--text);
   padding: 1.5em;
 
@@ -1934,15 +2087,6 @@ th.validation-cell {
   ul {
     margin-bottom: 1em;
   }
-}
-
-.input.date-input {
-  border-radius: 10px;
-}
-
-.date-input::placeholder {
-  border-radius: 10px;
-  color: $light-grey;
 }
 
 .project-dates .date-input {
@@ -2012,7 +2156,7 @@ th.validation-cell {
   width: 150px;
 
   &.short {
-    width: 106px;
+    width: 112px;
   }
 }
 
@@ -2142,6 +2286,28 @@ th.validation-cell {
   }
 }
 
+.warning {
+  color: $orange;
+}
+
+.warning-text {
+  background-color: rgba($orange, 0.2);
+  border-left: 4px solid $orange;
+  border-bottom-right-radius: 0.5em;
+  border-top-right-radius: 0.5em;
+  padding: 0.5em;
+}
+
+// Ludice Icons
+.icon-1x {
+  width: 1em;
+  height: 1em;
+}
+
+.align-middle {
+  vertical-align: middle;
+}
+
 @media screen and (max-width: 1000px) {
   .button .icon.is-small {
     margin-right: 0;
@@ -2183,6 +2349,45 @@ th.validation-cell {
   .hero {
     display: flex;
     flex-direction: column;
+  }
+}
+
+/* scrollbar */
+::-webkit-scrollbar {
+  width: 20px;
+  height: 20px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background-color: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #eee;
+  border-radius: 20px;
+  border: 6px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #ddd;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: #ccc;
+}
+.dark {
+  ::-webkit-scrollbar-thumb {
+    background-color: #46494f;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #4d5560;
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background-color: #5e6169;
   }
 }
 </style>

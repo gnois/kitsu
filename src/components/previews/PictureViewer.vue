@@ -33,17 +33,20 @@
 
 <script>
 import panzoom from 'panzoom'
+
 import { fullScreenMixin } from '@/components/mixins/fullscreen'
 import { domMixin } from '@/components/mixins/dom'
-import Spinner from '@/components/widgets/Spinner'
+
+import Spinner from '@/components/widgets/Spinner.vue'
 
 export default {
   name: 'picture-viewer',
 
+  mixins: [domMixin, fullScreenMixin],
+
   components: {
     Spinner
   },
-  mixins: [domMixin, fullScreenMixin],
 
   props: {
     big: {
@@ -59,6 +62,10 @@ export default {
       default: 0
     },
     fullScreen: {
+      type: Boolean,
+      default: false
+    },
+    highQuality: {
       type: Boolean,
       default: false
     },
@@ -93,8 +100,8 @@ export default {
   mounted() {
     this.container.style.height = this.defaultHeight + 'px'
     this.isLoading = true
+    this.setPictureEmptyPath()
     if (this.picture.complete) {
-      this.isLoading = false
       this.onWindowResize()
     }
     this.picture.addEventListener('load', this.endLoading)
@@ -222,21 +229,21 @@ export default {
     },
 
     onWindowResize() {
-      const now = new Date().getTime()
-      this.lastCall = this.lastCall || 0
-      if (now - this.lastCall > 600) {
-        this.lastCall = now
-        this.$nextTick(this.resetPicture)
-        setTimeout(() => {
-          this.resetPicture()
-        }, 400)
-      }
+      this.resetPicture()
     },
 
     // Configuration
 
     endLoading() {
-      this.isLoading = false
+      if (
+        this.fullScreen &&
+        (this.pictureBig.complete || this.pictureGif.complete)
+      ) {
+        this.isLoading = false
+      } else if (!this.fullScreen && this.picture.complete) {
+        this.isLoading = false
+      }
+      this.$emit('loaded')
       this.$nextTick(this.resetPicture)
     },
 
@@ -270,8 +277,8 @@ export default {
         const pictureElement = this.isGif
           ? this.pictureGif
           : this.fullScreen
-          ? this.pictureBig
-          : this.picture
+            ? this.pictureBig
+            : this.picture
         const picturePosition = pictureElement.getBoundingClientRect()
         const containerPosition = this.container.getBoundingClientRect()
         const top = picturePosition.top - containerPosition.top
@@ -281,7 +288,25 @@ export default {
 
         this.resetPanZoom()
 
-        this.$emit('size-changed', { width, height, top, left })
+        if (
+          !this.previousDimensions ||
+          this.previousDimensions.width !== width ||
+          this.previousDimensions.height !== height ||
+          this.previousDimensions.left !== left ||
+          this.previousDimensions.top !== top
+        ) {
+          this.$emit('size-changed', { width, height, top, left })
+        }
+        this.previousDimensions = { width, height, top, left }
+      }
+    },
+
+    setPictureEmptyPath() {
+      if (this.isGif && this.isPicture) {
+        this.pictureGifPath = null
+      } else if (this.preview && this.isPicture) {
+        this.picturePath = null
+        this.pictureDlPath = null
       }
     },
 
@@ -291,7 +316,11 @@ export default {
         this.pictureGifPath = `/api/pictures/originals/preview-files/${previewId}.gif`
       } else if (this.preview && this.isAvailable && this.isPicture) {
         const previewId = this.preview.id
-        this.picturePath = `/api/pictures/previews/preview-files/${previewId}.png`
+        if (this.highQuality) {
+          this.picturePath = `/api/pictures/originals/preview-files/${previewId}.png`
+        } else {
+          this.picturePath = `/api/pictures/previews/preview-files/${previewId}.png`
+        }
       }
       this.setPictureDlPath()
     },
@@ -343,6 +372,18 @@ export default {
         panzoom.moveTo(0, 0)
         panzoom.zoomAbs(0, 0, 1)
       })
+    },
+
+    pausePanZoom() {
+      if (this.panzoomInstance) {
+        this.panzoomInstance.pause()
+      }
+    },
+
+    resumePanZoom() {
+      if (this.panzoomInstance) {
+        this.panzoomInstance.resume()
+      }
     }
   },
 
@@ -377,23 +418,26 @@ export default {
     },
 
     preview() {
-      this.resetPanZoom()
-      this.isLoading = true
-      this.setPicturePath()
-      this.setPictureDlPath()
-      if (this.currentIndex > 1) {
-        this.currentIndex = 1
-      }
-      if (this.fullScreen) {
-        if (this.pictureBig.complete) {
+      if (this.preview && this.preview.id !== this.lastPreviewId) {
+        this.lastPreviewId = this.preview.id
+        this.resetPanZoom()
+        this.isLoading = true
+        this.setPictureEmptyPath()
+        this.$nextTick(() => {
           this.resetPicture()
-          this.isLoading = false
-        }
-      } else {
-        if (this.picture.complete) {
-          this.isLoading = false
-        }
-        this.$nextTick(this.resetPicture)
+          this.setPicturePath()
+          this.setPictureDlPath()
+          if (this.currentIndex > 1) {
+            this.currentIndex = 1
+          }
+          if (this.fullScreen) {
+            if (this.pictureBig.complete) {
+              this.resetPicture()
+            }
+          } else {
+            this.$nextTick(this.resetPicture)
+          }
+        })
       }
     }
   }

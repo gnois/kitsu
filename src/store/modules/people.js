@@ -1,4 +1,3 @@
-import Vue from 'vue/dist/vue'
 import peopleApi from '@/store/api/people'
 import colors from '@/lib/colors'
 import { clearSelectionGrid } from '@/lib/selection'
@@ -13,13 +12,12 @@ import {
   LOAD_PEOPLE_START,
   LOAD_PEOPLE_ERROR,
   LOAD_PEOPLE_END,
-  SHOW_IMPORT_PEOPLE_MODAL,
-  HIDE_IMPORT_PEOPLE_MODAL,
   PERSON_CSV_FILE_SELECTED,
   IMPORT_PEOPLE_START,
   IMPORT_PEOPLE_ERROR,
   IMPORT_PEOPLE_END,
   UPLOAD_AVATAR_END,
+  CLEAR_AVATAR,
   USER_SAVE_PROFILE_SUCCESS,
   LOAD_PERSON_TASKS_END,
   LOAD_PERSON_DONE_TASKS_END,
@@ -39,6 +37,7 @@ import {
   SET_ORGANISATION,
   SET_PERSON_TASKS_SCROLL_POSITION,
   PEOPLE_SET_DAY_OFFS,
+  PEOPLE_SET_DAYS_OFF,
   PEOPLE_SEARCH_CHANGE,
   RESET_ALL,
   REMOVE_PEOPLE_SEARCH_END,
@@ -48,31 +47,35 @@ import {
 
 const helpers = {
   addAdditionalInformation(person) {
-    if (person) {
-      if (person.first_name && person.last_name) {
-        person.name = `${person.first_name} ${person.last_name}`
-        person.initials = `${person.first_name[0]}${person.last_name[0]}`
-      } else if (person.first_name) {
-        person.name = person.first_name
-        person.initials = person.first_name[0]
-      } else if (person.last_name) {
-        person.name = person.last_name
-        person.initials = person.last_name[0]
-      } else if (person.email) {
-        person.name = person.email
-        person.initials = person.email[0]
-      } else {
-        person.name = ''
-        person.initials = 'NN'
-      }
+    if (!person) {
+      return
+    }
 
-      Vue.set(person, 'initials', person.initials.toUpperCase())
-      person.color = colors.fromString(person.name)
-      if (person.has_avatar && !person.uniqueHash) {
-        const randomHash = Math.random().toString(36).substring(7)
-        Vue.set(person, 'uniqueHash', randomHash)
-        person.avatarPath = `/api/pictures/thumbnails/persons/${person.id}.png`
-      }
+    const { email, first_name, last_name } = person
+
+    if (first_name && last_name) {
+      person.name = `${first_name} ${last_name}`
+      person.initials = `${first_name[0]}${last_name[0]}`
+    } else if (first_name) {
+      person.name = first_name
+      person.initials = first_name[0]
+    } else if (last_name) {
+      person.name = last_name
+      person.initials = last_name[0]
+    } else if (email) {
+      person.name = email
+      person.initials = email[0]
+    } else {
+      person.name = ''
+      person.initials = 'NN'
+    }
+    person.initials = person.initials.toUpperCase()
+    person.color = colors.fromString(person.name)
+
+    if (person.has_avatar) {
+      const lastUpdate = person.updated_at || person.created_at
+      const timestamp = Date.parse(lastUpdate)
+      person.avatarPath = `/api/pictures/thumbnails/persons/${person.id}.png?t=${timestamp}`
     }
     return person
   },
@@ -113,8 +116,11 @@ const initialState = {
     name: 'Kitsu',
     hours_by_day: 8,
     has_avatar: false,
-    use_original_file_name: 'false',
-    timesheets_locked: 'false'
+    hd_by_default: false,
+    timesheets_locked: false,
+    use_original_file_name: false,
+    format_duration_in_hours: false,
+    dark_theme_by_default: false
   },
 
   people: [],
@@ -125,7 +131,6 @@ const initialState = {
   isPeopleLoading: false,
   isPeopleLoadingError: true,
 
-  isImportPeopleModalShown: false,
   isImportPeopleLoading: false,
   isImportPeopleLoadingError: false,
 
@@ -151,7 +156,8 @@ const initialState = {
   timesheet: {},
   personTimeSpentMap: {},
   personTimeSpentTotal: 0,
-  personIsDayOff: false,
+  personDayOff: {},
+  daysOff: [],
   dayOffMap: {}
 }
 
@@ -163,6 +169,10 @@ const getters = {
   organisation: state => state.organisation,
 
   people: state => state.people,
+  peopleWithoutBot: state => state.people.filter(person => !person.is_bot),
+  activePeople: state => state.people.filter(person => person.active),
+  activePeopleWithoutBot: state =>
+    state.people.filter(person => person.active && !person.is_bot),
   displayedPeople: state => state.displayedPeople,
   peopleIndex: state => state.peopleIndex,
   personMap: state => state.personMap,
@@ -178,7 +188,6 @@ const getters = {
   peopleSearchQueries: state => state.peopleSearchQueries,
   peopleSearchText: state => state.peopleSearchText,
 
-  isImportPeopleModalShown: state => state.isImportPeopleModalShown,
   isImportPeopleLoading: state => state.isImportPeopleLoading,
   isImportPeopleLoadingError: state => state.isImportPeopleLoadingError,
 
@@ -199,51 +208,44 @@ const getters = {
   personTaskSelectionGrid: state => state.personTaskSelectionGrid,
   personTasksScrollPosition: state => state.personTasksScrollPosition,
 
-  getPerson: (state, getters) => id => state.personMap.get(id),
-  getPersonOptions: state =>
-    state.people.map(person => {
-      return {
-        label: `${person.first_name} ${person.last_name}`,
-        value: person.id
-      }
-    }),
+  getPerson: state => id => state.personMap.get(id),
 
   timesheet: state => state.timesheet,
   personTimeSpentMap: state => state.personTimeSpentMap,
   personTimeSpentTotal: state => state.personTimeSpentTotal,
-  personIsDayOff: state => state.personIsDayOff,
-  dayOffMap: state => state.dayOffMap
+  personDayOff: state => state.personDayOff,
+  personIsDayOff: state => Boolean(state.personDayOff?.id),
+  dayOffMap: state => state.dayOffMap,
+  daysOff: state => state.daysOff
 }
 
 const actions = {
-  getOrganisation({ commit }) {
-    return peopleApi.getOrganisation().then(organisation => {
-      commit(SET_ORGANISATION, organisation)
-    })
+  async getOrganisation({ commit }) {
+    const organisations = await peopleApi.getOrganisations()
+    commit(SET_ORGANISATION, organisations[0])
   },
 
-  saveOrganisation({ commit }, form) {
+  async saveOrganisation({ commit }, form) {
     form.id = state.organisation.id
-    return peopleApi.updateOrganisation(form).then(organisation => {
-      commit(SET_ORGANISATION, organisation)
-      Promise.resolve(organisation)
-    })
+    const organisation = await peopleApi.updateOrganisation(form)
+    commit(SET_ORGANISATION, organisation)
+    return organisation
   },
 
-  uploadOrganisationLogo({ commit, state }, formData) {
-    return new Promise((resolve, reject) => {
-      const organisationId = state.organisation.id
-      peopleApi
-        .postOrganisationLogo(organisationId, formData)
-        .then(organisation => {
-          commit(SET_ORGANISATION, { has_avatar: true })
-          resolve()
-        })
-        .catch(reject)
-    })
+  async uploadOrganisationLogo({ commit, state }, formData) {
+    const organisationId = state.organisation.id
+    await peopleApi.postOrganisationLogo(organisationId, formData)
+    commit(SET_ORGANISATION, { has_avatar: true })
   },
 
-  loadPeople({ commit, state, rootGetters }, callback) {
+  async deleteOrganisationLogo({ commit, state }) {
+    const organisationId = state.organisation.id
+    await peopleApi.deleteOrganisationLogo(organisationId)
+    commit(SET_ORGANISATION, { has_avatar: false })
+  },
+
+  // FIXME: refactor callback to async/await
+  loadPeople({ commit, rootGetters }, callback) {
     commit(LOAD_PEOPLE_START)
     peopleApi.getPeople((err, people) => {
       if (err) {
@@ -262,81 +264,77 @@ const actions = {
     })
   },
 
-  loadPerson({ commit, state }, personId) {
-    peopleApi.getPerson(personId, (err, person) => {
-      if (err) console.error(err)
-    })
+  async loadPerson({ commit }, personId) {
+    const person = await peopleApi.getPerson(personId)
+    commit(EDIT_PEOPLE_END, person)
   },
 
-  newPerson({ commit, state }, data) {
-    return peopleApi.createPerson(data).then(person => {
-      commit(EDIT_PEOPLE_END, person)
-      Promise.resolve()
-    })
+  async newPerson({ commit }, data) {
+    const person = await peopleApi.createPerson(data)
+    commit(EDIT_PEOPLE_END, person)
+    return person
   },
 
-  newPersonAndInvite({ commit, state }, data) {
-    return peopleApi
-      .createPerson(data)
-      .then(peopleApi.invitePerson)
-      .then(person => {
-        commit(EDIT_PEOPLE_END, person)
-        Promise.resolve()
-      })
+  async newPersonAndInvite({ commit }, data) {
+    let person = await peopleApi.createPerson(data)
+    person = await peopleApi.invitePerson(person)
+    commit(EDIT_PEOPLE_END, person)
+    return person
   },
 
-  invitePerson({ commit, state }, person) {
+  invitePerson({}, person) {
     return peopleApi.invitePerson(person)
   },
 
-  editPerson({ commit, state }, data) {
-    return peopleApi.updatePerson(data).then(person => {
-      commit(EDIT_PEOPLE_END, person)
-      Promise.resolve()
-    })
+  generateToken({}, person) {
+    return peopleApi.generateToken(person)
   },
 
-  deletePeople({ commit, state }, person) {
-    return peopleApi.deletePerson(person).then(() => {
-      commit(DELETE_PEOPLE_END)
-      Promise.resolve()
-    })
+  async uploadPersonAvatar({ commit }, { person, formData }) {
+    await peopleApi.postAvatar(person.id, formData)
+    commit(UPLOAD_AVATAR_END, person.id)
   },
 
-  changePasswordPerson({ commit, state }, { person, form }) {
-    return new Promise((resolve, reject) => {
-      if (auth.isPasswordValid(form.password, form.password2)) {
-        return peopleApi
-          .changePasswordPerson(person, form)
-          .then(() => resolve())
-          .catch(err => reject(err))
-      } else {
-        const err = new Error('Password is not valid')
-        err.isValidPassword = false
-        return reject(err)
-      }
-    })
+  async clearPersonAvatar({ commit }, person) {
+    await peopleApi.clearPersonAvatar(person)
+    commit(CLEAR_AVATAR, person.id)
   },
 
-  disableTwoFactorAuthenticationPerson({ commit, state }, person) {
-    return peopleApi.disableTwoFactorAuthenticationPerson(person).then(() => {
-      commit(DISABLE_TWO_FACTOR_AUTHENTICATION_END, person.id)
-      Promise.resolve()
-    })
+  async editPerson({ commit }, data) {
+    const person = await peopleApi.updatePerson(data)
+    commit(EDIT_PEOPLE_END, person)
+    return person
   },
 
-  uploadPersonFile({ commit, state }, toUpdate) {
+  async deletePeople({ commit }, person) {
+    await peopleApi.deletePerson(person)
+    commit(DELETE_PEOPLE_END)
+  },
+
+  async changePasswordPerson({}, { person, form }) {
+    if (auth.isPasswordValid(form.password, form.password2)) {
+      await peopleApi.changePasswordPerson(person, form)
+    } else {
+      const err = new Error('Password is not valid')
+      err.isValidPassword = false
+      throw err
+    }
+  },
+
+  async disableTwoFactorAuthenticationPerson({ commit }, person) {
+    await peopleApi.disableTwoFactorAuthenticationPerson(person)
+    commit(DISABLE_TWO_FACTOR_AUTHENTICATION_END, person.id)
+  },
+
+  async uploadPersonFile({ commit, state }, toUpdate) {
     commit(IMPORT_PEOPLE_START)
-    return peopleApi
-      .postCsv(state.personCsvFormData, toUpdate)
-      .then(() => {
-        commit(IMPORT_PEOPLE_END)
-        Promise.resolve()
-      })
-      .catch(err => {
-        commit(IMPORT_PEOPLE_ERROR)
-        Promise.reject(err)
-      })
+    try {
+      await peopleApi.postCsv(state.personCsvFormData, toUpdate)
+      commit(IMPORT_PEOPLE_END)
+    } catch (err) {
+      commit(IMPORT_PEOPLE_ERROR)
+      throw err
+    }
   },
 
   async fetchPersonTasks({ commit, rootGetters }, personId) {
@@ -361,10 +359,7 @@ const actions = {
     return tasks
   },
 
-  loadPersonTasks(
-    { commit, state, rootGetters },
-    { personId, forced, date, callback }
-  ) {
+  async loadPersonTasks({ commit, rootGetters }, { personId, date }) {
     const userFilters = rootGetters.userFilters
     const taskTypeMap = rootGetters.taskTypeMap
     commit(LOAD_PERSON_TASKS_END, {
@@ -374,34 +369,28 @@ const actions = {
       taskTypeMap
     })
     commit(LOAD_PERSON_DONE_TASKS_END, [])
-    peopleApi.getPersonTasks(personId, (err, tasks) => {
-      if (err) tasks = []
-      peopleApi.getPersonDoneTasks(personId, (err, doneTasks) => {
-        if (err) doneTasks = []
-        commit(LOAD_PERSON_DONE_TASKS_END, doneTasks)
-        peopleApi
-          .getTimeSpents(personId, date)
-          .then(timeSpents => {
-            commit(PERSON_LOAD_TIME_SPENTS_END, timeSpents)
-            return peopleApi.getDayOff(personId, date)
-          })
-          .then(dayOff => {
-            commit(PERSON_SET_DAY_OFF, dayOff)
-            commit(LOAD_PERSON_TASKS_END, {
-              personId,
-              tasks,
-              userFilters,
-              taskTypeMap
-            })
-            if (callback) callback(err)
-          })
-      })
+
+    const [tasks, doneTasks, timeSpents, dayOff] = await Promise.all([
+      peopleApi.getPersonTasks(personId).catch(() => []),
+      peopleApi.getPersonDoneTasks(personId).catch(() => []),
+      peopleApi.getTimeSpents(personId, date),
+      peopleApi.getDayOff(personId, date)
+    ])
+
+    commit(LOAD_PERSON_DONE_TASKS_END, doneTasks)
+    commit(PERSON_LOAD_TIME_SPENTS_END, timeSpents)
+    commit(PERSON_SET_DAY_OFF, dayOff)
+    commit(LOAD_PERSON_TASKS_END, {
+      personId,
+      tasks,
+      userFilters,
+      taskTypeMap
     })
   },
 
   loadAggregatedPersonTimeSpents(
-    { commit, state, rootGetters },
-    { personId, detailLevel, year, month, week, day, productionId }
+    {},
+    { personId, detailLevel, year, month, week, day, productionId, studioId }
   ) {
     return peopleApi.getAggregatedPersonTimeSpents(
       personId,
@@ -410,12 +399,13 @@ const actions = {
       month,
       week,
       day,
-      productionId
+      productionId,
+      studioId
     )
   },
 
   loadAggregatedPersonDaysOff(
-    { commit, state, rootGetters },
+    {},
     { personId, detailLevel, year, month, week }
   ) {
     if (detailLevel === 'day') {
@@ -431,94 +421,102 @@ const actions = {
     }
   },
 
-  showPersonImportModal({ commit, state }, personId) {
-    commit(SHOW_IMPORT_PEOPLE_MODAL)
-  },
-
-  hidePersonImportModal({ commit, state }, personId) {
-    commit(HIDE_IMPORT_PEOPLE_MODAL)
-  },
-
-  setPersonTasksSearch({ commit, state }, searchText) {
+  setPersonTasksSearch({ commit }, searchText) {
     commit(SET_PERSON_TASKS_SEARCH, searchText)
   },
 
-  savePersonTasksSearch({ commit, rootGetters }, searchQuery) {
-    const query = state.personTaskSearchQueries.find(
-      query => query.name === searchQuery
-    )
-
-    if (!query) {
-      return peopleApi
-        .createFilter('persontasks', searchQuery, searchQuery, null, null)
-        .then(searchQuery => {
-          commit(SAVE_PERSON_TASKS_SEARCH_END, { searchQuery })
-          return Promise.resolve(searchQuery)
-        })
-    } else {
-      return Promise.resolve()
+  async savePersonTasksSearch({ commit }, searchQuery) {
+    if (
+      state.personTaskSearchQueries.some(query => query.name === searchQuery)
+    ) {
+      return
     }
+    searchQuery = await peopleApi.createFilter(
+      'persontasks',
+      searchQuery,
+      searchQuery,
+      null,
+      null
+    )
+    commit(SAVE_PERSON_TASKS_SEARCH_END, { searchQuery })
   },
 
-  removePersonTasksSearch({ commit, rootGetters }, searchQuery) {
-    return peopleApi.removeFilter(searchQuery).then(() => {
-      commit(REMOVE_PERSON_TASKS_SEARCH_END, { searchQuery })
-      return Promise.resolve()
-    })
+  async removePersonTasksSearch({ commit }, searchQuery) {
+    await peopleApi.removeFilter(searchQuery)
+    commit(REMOVE_PERSON_TASKS_SEARCH_END, { searchQuery })
   },
 
-  setTimeSpent({ commit }, { personId, taskId, date, duration }) {
-    return peopleApi
-      .setTimeSpent(taskId, personId, date, duration)
-      .then(timeSpent => {
-        commit(SET_TIME_SPENT, timeSpent)
-        Promise.resolve(timeSpent)
-      })
+  async setTimeSpent({ commit }, { personId, taskId, date, duration }) {
+    const timeSpent = await peopleApi.setTimeSpent(
+      taskId,
+      personId,
+      date,
+      duration
+    )
+    commit(SET_TIME_SPENT, timeSpent)
   },
 
-  setDayOff({ commit }, { personId, date }) {
-    return peopleApi.setDayOff(personId, date).then(dayOff => {
-      commit(PERSON_SET_DAY_OFF, dayOff)
-      Promise.resolve(dayOff)
-    })
+  async setDayOff({ commit }, { id, personId, date, end_date, description }) {
+    let dayOff
+    if (id) {
+      dayOff = await peopleApi.updateDayOff(
+        id,
+        personId,
+        date,
+        end_date,
+        description
+      )
+    } else {
+      dayOff = await peopleApi.createDayOff(
+        personId,
+        date,
+        end_date,
+        description
+      )
+    }
+    commit(PERSON_SET_DAY_OFF, dayOff)
   },
 
-  unsetDayOff({ commit, state }, dayOff) {
-    return peopleApi.unsetDayOff(state.personDayOff).then(dayOff => {
-      commit(PERSON_SET_DAY_OFF, {})
-      Promise.resolve()
-    })
+  async unsetDayOff({ commit }, dayOff = null) {
+    await peopleApi.deleteDayOff(dayOff || state.personDayOff)
+    commit(PERSON_SET_DAY_OFF, {})
   },
 
   setPersonTasksScrollPosition({ commit }, scrollPosition) {
     commit(SET_PERSON_TASKS_SCROLL_POSITION, scrollPosition)
   },
 
-  loadTimesheets({ commit }, { detailLevel, year, month, productionId }) {
-    const monthString =
-      month.length === 1 ? `0${parseInt(month) + 1}` : `${month}`
-    let mainFunc = peopleApi.getMonthTable
+  async loadTimesheets(
+    { commit },
+    { detailLevel, year, month, productionId, studioId }
+  ) {
+    const monthString = String(month).padStart(2, '0')
+    let getTableFn
+    switch (detailLevel) {
+      case 'day':
+        getTableFn = peopleApi.getDayTable
+        break
+      case 'week':
+        getTableFn = peopleApi.getWeekTable
+        break
+      case 'year':
+        getTableFn = peopleApi.getYearTable
+        break
+      default:
+        getTableFn = peopleApi.getMonthTable
+    }
+    const table = await getTableFn(year, monthString, productionId, studioId)
     if (detailLevel === 'day') {
-      mainFunc = peopleApi.getDayTable
+      const dayOffs = await peopleApi.getDaysOff(year, monthString)
+      commit(PEOPLE_SET_DAY_OFFS, { dayOffs, month })
     }
-    if (detailLevel === 'week') {
-      mainFunc = peopleApi.getWeekTable
-    }
-    if (detailLevel === 'year') {
-      mainFunc = peopleApi.getYearTable
-    }
-    return mainFunc(year, monthString, productionId).then(table => {
-      if (detailLevel === 'day') {
-        peopleApi.getDayOffs(year, monthString).then(dayOffs => {
-          commit(PEOPLE_SET_DAY_OFFS, dayOffs)
-          commit(PEOPLE_TIMESHEET_LOADED, table)
-          Promise.resolve(table)
-        })
-      } else {
-        commit(PEOPLE_TIMESHEET_LOADED, table)
-        Promise.resolve(table)
-      }
-    })
+    commit(PEOPLE_TIMESHEET_LOADED, table)
+  },
+
+  async loadDaysOff({ commit }, { year, month } = {}) {
+    month = year && month ? String(month).padStart(2, '0') : undefined
+    const daysOff = await peopleApi.getDaysOff(year, month)
+    commit(PEOPLE_SET_DAYS_OFF, daysOff)
   },
 
   setPeopleSearch({ commit, rootGetters }, peopleSearch) {
@@ -529,32 +527,27 @@ const actions = {
     })
   },
 
-  savePeopleSearch({ commit, rootGetters }, searchQuery) {
-    const query = state.peopleSearchQueries.find(
-      query => query.name === searchQuery
-    )
-
-    if (!query) {
-      peopleApi
-        .createFilter('people', searchQuery, searchQuery, null, null)
-        .then(searchQuery => {
-          commit(SAVE_PEOPLE_SEARCH_END, { searchQuery })
-          return Promise.resolve(searchQuery)
-        })
-    } else {
-      Promise.resolve()
+  async savePeopleSearch({ commit }, searchQuery) {
+    if (state.peopleSearchQueries.some(query => query.name === searchQuery)) {
+      return
     }
+    searchQuery = await peopleApi.createFilter(
+      'people',
+      searchQuery,
+      searchQuery,
+      null,
+      null
+    )
+    commit(SAVE_PEOPLE_SEARCH_END, { searchQuery })
   },
 
-  removePeopleSearch({ commit, rootGetters }, searchQuery) {
-    return peopleApi.removeFilter(searchQuery).then(() => {
-      commit(REMOVE_PEOPLE_SEARCH_END, { searchQuery })
-      return Promise.resolve()
-    })
+  async removePeopleSearch({ commit }, searchQuery) {
+    await peopleApi.removeFilter(searchQuery)
+    commit(REMOVE_PEOPLE_SEARCH_END, { searchQuery })
   },
 
   getPersonQuotaShots(
-    { commit, state, rootGetters },
+    { rootGetters },
     { taskTypeId, detailLevel, personId, year, month, week, day, computeMode }
   ) {
     const production = rootGetters.currentProduction
@@ -587,25 +580,21 @@ const mutations = {
   [LOAD_PEOPLE_END](state, { people, userFilters }) {
     state.isPeopleLoading = false
     state.isPeopleLoadingError = false
-    state.people = sortPeople(people)
-    state.displayedPeople = state.people
-    state.people.forEach(person => {
+    state.people = sortPeople(people).map(person => {
       person = helpers.addAdditionalInformation(person)
       state.personMap.set(person.id, person)
+      return person
     })
+    state.displayedPeople = state.people
     cache.peopleIndex = buildNameIndex(state.people)
 
-    if (userFilters.people && userFilters.people.all) {
-      state.peopleSearchQueries = userFilters.people.all
-    } else {
-      state.shotSearchQueries = []
-    }
+    state.peopleSearchQueries = userFilters.people?.all || []
   },
 
   [DELETE_PEOPLE_END](state, person) {
     if (person) {
       const personToDeleteIndex = state.people.findIndex(
-        p => p.id === person.id
+        ({ id }) => id === person.id
       )
       if (personToDeleteIndex >= 0) {
         state.people.splice(personToDeleteIndex, 1)
@@ -621,21 +610,18 @@ const mutations = {
     }
   },
 
-  [EDIT_PEOPLE_END](state, form) {
-    let personToAdd = { ...form }
-    personToAdd = helpers.addAdditionalInformation(personToAdd)
-
-    const personToEditIndex = state.people.findIndex(
-      person => person.id === personToAdd.id
-    )
-    if (personToAdd.name) {
+  [EDIT_PEOPLE_END](state, person) {
+    person = helpers.addAdditionalInformation(person)
+    if (person.name) {
+      const personToEditIndex = state.people.findIndex(
+        ({ id }) => id === person.id
+      )
       if (personToEditIndex >= 0) {
-        state.personMap.set(personToAdd.id, personToAdd)
-        state.people[personToEditIndex] = state.personMap.get(personToAdd.id)
-      } else if (!state.personMap.get(personToAdd.id)) {
-        state.people.push(personToAdd)
-        state.personMap.set(personToAdd.id, personToAdd)
+        state.people[personToEditIndex] = person
+      } else if (!state.personMap.has(person.id)) {
+        state.people.push(person)
       }
+      state.personMap.set(person.id, person)
       state.people = sortPeople(state.people)
       cache.peopleIndex = buildNameIndex(state.people)
       if (state.peopleSearchText) {
@@ -654,12 +640,12 @@ const mutations = {
     person.preferred_two_factor_authentication = null
   },
 
-  [IMPORT_PEOPLE_START](state, data) {
+  [IMPORT_PEOPLE_START](state) {
     state.isImportPeopleLoading = true
     state.isImportPeopleLoadingError = false
   },
 
-  [IMPORT_PEOPLE_END](state, personId) {
+  [IMPORT_PEOPLE_END](state) {
     state.isImportPeopleLoading = false
     state.isImportPeopleLoadingError = false
   },
@@ -669,16 +655,6 @@ const mutations = {
     state.isImportPeopleLoadingError = true
   },
 
-  [SHOW_IMPORT_PEOPLE_MODAL](state) {
-    state.isImportPeopleModalShown = true
-    state.isImportPeopleLoading = false
-    state.isImportPeopleLoadingError = false
-  },
-
-  [HIDE_IMPORT_PEOPLE_MODAL](state) {
-    state.isImportPeopleModalShown = false
-  },
-
   [PERSON_CSV_FILE_SELECTED](state, formData) {
     state.personCsvFormData = formData
   },
@@ -686,10 +662,16 @@ const mutations = {
   [UPLOAD_AVATAR_END](state, personId) {
     const person = state.personMap.get(personId)
     if (person) {
-      const randomHash = Math.random().toString(36).substring(7)
+      const timestamp = Date.now()
+      person.avatarPath = `/api/pictures/thumbnails/persons/${person.id}.png?t=${timestamp}`
       person.has_avatar = true
-      Vue.set(person, 'uniqueHash', randomHash)
-      person.avatarPath = `/api/pictures/thumbnails/persons/${person.id}.png`
+    }
+  },
+
+  [CLEAR_AVATAR](state, personId) {
+    const person = state.personMap.get(personId)
+    if (person) {
+      person.has_avatar = false
     }
   },
 
@@ -726,6 +708,7 @@ const mutations = {
   [LOAD_PERSON_DONE_TASKS_END](state, tasks) {
     tasks.forEach(populateTask)
     state.displayedPersonDoneTasks = tasks
+    cache.personDoneTasks = tasks
     cache.personDoneTasksIndex = buildTaskIndex(tasks)
   },
 
@@ -821,16 +804,29 @@ const mutations = {
 
   [PERSON_SET_DAY_OFF](state, dayOff) {
     state.personDayOff = dayOff
-    state.personIsDayOff = dayOff !== null && dayOff.id !== undefined
   },
 
-  [PEOPLE_SET_DAY_OFFS](state, dayOffs) {
+  [PEOPLE_SET_DAYS_OFF](state, daysOff) {
+    state.daysOff = daysOff
+  },
+
+  [PEOPLE_SET_DAY_OFFS](state, { dayOffs, month }) {
     const dayOffMap = {}
     // Build a map that tells if a day is off. It uses two keys: the person id
     // and the day number.
-    dayOffs.forEach(dayOff => {
-      if (!dayOffMap[dayOff.person_id]) dayOffMap[dayOff.person_id] = {}
-      dayOffMap[dayOff.person_id][dayOff.date.substring(8, 10)] = true
+    dayOffs.forEach(({ person_id, date, end_date }) => {
+      if (!dayOffMap[person_id]) {
+        dayOffMap[person_id] = {}
+      }
+      const currentDate = new Date(date)
+      const endDate = new Date(end_date)
+      while (currentDate <= endDate) {
+        if (currentDate.getUTCMonth() + 1 === month) {
+          const day = currentDate.toISOString().substring(8, 10)
+          dayOffMap[person_id][day] = true
+        }
+        currentDate.setDate(currentDate.getDate() + 1)
+      }
     })
     state.dayOffMap = dayOffMap
   },
@@ -853,11 +849,10 @@ const mutations = {
   },
 
   [SET_ORGANISATION](state, organisation) {
-    Object.assign(state.organisation, organisation)
-    state.organisation = { ...state.organisation }
+    state.organisation = { ...state.organisation, ...organisation }
   },
 
-  [RESET_ALL](state, people) {
+  [RESET_ALL](state) {
     Object.assign(state, { ...initialState })
     cache.peopleIndex = {}
     cache.personTasksIndex = {}

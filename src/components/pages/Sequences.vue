@@ -15,11 +15,19 @@
             <button-simple
               class="flexrow-item"
               :title="$t('entities.build_filter.title')"
-              icon="funnel"
+              icon="filter"
               @click="() => (modals.isBuildFilterDisplayed = true)"
             />
             <div class="filler"></div>
             <div class="flexrow flexrow-item" v-if="!isCurrentUserClient">
+              <combobox-department
+                class="combobox-department flexrow-item"
+                :selectable-departments="selectableDepartments('Sequence')"
+                :display-all-and-my-departments="true"
+                rounded
+                v-model="selectedDepartment"
+                v-if="departments.length > 0"
+              />
               <show-assignations-button class="flexrow-item" />
               <show-infos-button class="flexrow-item" />
               <big-thumbnails-button class="flexrow-item" />
@@ -37,6 +45,7 @@
           <div class="query-list mt1">
             <search-query-list
               :queries="sequenceSearchQueries"
+              type="sequence"
               @change-search="changeSearch"
               @remove-search="removeSearchQuery"
               v-if="!isSequencesLoading && !initialLoading"
@@ -45,12 +54,10 @@
         </div>
 
         <sorting-info
-          :label="$t('main.sorted_by')"
           :sorting="sequenceSorting"
           @clear-sorting="onChangeSortClicked(null)"
-          v-if="sequenceSorting && sequenceSorting.length > 0"
+          v-if="sequenceSorting?.length"
         />
-
         <sequence-list
           ref="sequence-list"
           :displayed-sequences="displayedSequences"
@@ -147,12 +154,14 @@
 
     <add-thumbnails-modal
       ref="add-thumbnails-modal"
+      entity-type="Sequence"
       parent="sequences"
       :active="modals.isAddThumbnailsDisplayed"
       :is-loading="loading.addThumbnails"
       :is-error="errors.addThumbnails"
       @cancel="hideAddThumbnailsModal"
       @confirm="confirmAddThumbnails"
+      v-if="false"
     />
 
     <build-filter-modal
@@ -195,25 +204,27 @@ import stringHelpers from '@/lib/string'
 import { searchMixin } from '@/components/mixins/search'
 import { entitiesMixin } from '@/components/mixins/entities'
 
-import AddMetadataModal from '@/components/modals/AddMetadataModal'
-import AddThumbnailsModal from '@/components/modals/AddThumbnailsModal'
-import BigThumbnailsButton from '@/components/widgets/BigThumbnailsButton'
-import BuildFilterModal from '@/components/modals/BuildFilterModal'
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import CreateTasksModal from '@/components/modals/CreateTasksModal'
-import DeleteModal from '@/components/modals/DeleteModal'
-import EditSequenceModal from '@/components/modals/EditSequenceModal'
+import AddMetadataModal from '@/components/modals/AddMetadataModal.vue'
+import AddThumbnailsModal from '@/components/modals/AddThumbnailsModal.vue'
+import BigThumbnailsButton from '@/components/widgets/BigThumbnailsButton.vue'
+import BuildFilterModal from '@/components/modals/BuildFilterModal.vue'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import ComboboxDepartment from '@/components/widgets/ComboboxDepartment.vue'
+import CreateTasksModal from '@/components/modals/CreateTasksModal.vue'
+import DeleteModal from '@/components/modals/DeleteModal.vue'
+import EditSequenceModal from '@/components/modals/EditSequenceModal.vue'
 import SequenceList from '@/components/lists/SequenceList.vue'
-import HardDeleteModal from '@/components/modals/HardDeleteModal'
-import SearchField from '@/components/widgets/SearchField'
-import SearchQueryList from '@/components/widgets/SearchQueryList'
-import SortingInfo from '@/components/widgets/SortingInfo'
-import ShowAssignationsButton from '@/components/widgets/ShowAssignationsButton'
-import ShowInfosButton from '@/components/widgets/ShowInfosButton'
+import HardDeleteModal from '@/components/modals/HardDeleteModal.vue'
+import SearchField from '@/components/widgets/SearchField.vue'
+import SearchQueryList from '@/components/widgets/SearchQueryList.vue'
+import SortingInfo from '@/components/widgets/SortingInfo.vue'
+import ShowAssignationsButton from '@/components/widgets/ShowAssignationsButton.vue'
+import ShowInfosButton from '@/components/widgets/ShowInfosButton.vue'
 import TaskInfo from '@/components/sides/TaskInfo.vue'
 
 export default {
   name: 'sequences',
+
   mixins: [searchMixin, entitiesMixin],
 
   components: {
@@ -222,6 +233,7 @@ export default {
     BigThumbnailsButton,
     BuildFilterModal,
     ButtonSimple,
+    ComboboxDepartment,
     CreateTasksModal,
     DeleteModal,
     EditSequenceModal,
@@ -279,6 +291,7 @@ export default {
         deleteMetadata: false,
         edit: false,
         importing: false,
+        savingSearch: false,
         sequence: false,
         stay: false
       },
@@ -308,7 +321,7 @@ export default {
       this.searchField.setValue(this.sequenceSearchText)
     }
     if (this.$route.query.search && this.$route.query.search.length > 0) {
-      searchQuery = '' + this.$route.query.search
+      searchQuery = `${this.$route.query.search}`
     }
     if (searchQuery === 'undefined') searchQuery = ''
     this.$refs['sequence-list'].setScrollPosition(
@@ -333,6 +346,7 @@ export default {
         this.$refs['sequence-list'].setScrollPosition(
           this.sequenceListScrollPosition
         )
+        this.$refs['sequence-list'].selectTaskFromQuery()
       }
     }
 
@@ -344,6 +358,7 @@ export default {
       this.loadSequencesWithTasks()
         .then(() => {
           this.initialLoading = false
+          finalize()
         })
         .catch(console.error)
     } else {
@@ -356,8 +371,8 @@ export default {
     ...mapGetters([
       'currentEpisode',
       'currentProduction',
+      'currentSection',
       'displayedSequences',
-      'deleteAllTasks',
       'departmentMap',
       'departments',
       'sequenceMap',
@@ -390,7 +405,7 @@ export default {
 
       this.productionSequenceTaskTypes.forEach(item => {
         collection.push(item.name)
-        collection.push(item.name + ' comment')
+        collection.push(`${item.name} comment`)
       })
       return collection
     },
@@ -416,7 +431,7 @@ export default {
       'changeSequenceSort',
       'clearSelectedSequences',
       'commentTaskWithPreview',
-      'deleteAllSequenceTasks',
+      'deleteAllTasks',
       'deleteSequence',
       'deleteMetadataDescriptor',
       'editSequence',
@@ -501,7 +516,15 @@ export default {
     },
 
     saveSearchQuery(searchQuery) {
-      this.saveSequenceSearch(searchQuery).catch(console.error)
+      if (this.loading.savingSearch) {
+        return
+      }
+      this.loading.savingSearch = true
+      this.saveSequenceSearch(searchQuery)
+        .catch(console.error)
+        .finally(() => {
+          this.loading.savingSearch = false
+        })
     },
 
     removeSearchQuery(searchQuery) {
@@ -543,23 +566,25 @@ export default {
       })
     },
 
-    onFieldChanged({ entry, fieldName, value }) {
+    async onFieldChanged({ entry, fieldName, value }) {
       const data = {
         id: entry.id,
-        description: entry.description
+        description: entry.description,
+        [fieldName]: value
       }
-      data[fieldName] = value
-      this.editSequence(data)
+      await this.editSequence(data)
+      this.onSearchChange(false)
     },
 
-    onMetadataChanged({ entry, descriptor, value }) {
-      const metadata = {}
-      metadata[descriptor.field_name] = value
+    async onMetadataChanged({ entry, descriptor, value }) {
       const data = {
         id: entry.id,
-        data: metadata
+        data: {
+          [descriptor.field_name]: value
+        }
       }
-      this.editSequence(data)
+      await this.editSequence(data)
+      this.onSearchChange(false)
     },
 
     onEditClicked(sequence) {
@@ -580,6 +605,7 @@ export default {
           .then(() => {
             this.loading.edit = false
             this.modals.isNewDisplayed = false
+            this.onSearchChange(false)
           })
           .catch(err => {
             console.error(err)
@@ -608,9 +634,8 @@ export default {
       const sequence = this.sequenceToDelete
       if (sequence) {
         return this.$t('sequences.delete_text', { name: sequence.name })
-      } else {
-        return ''
       }
+      return ''
     }
   },
 
@@ -639,11 +664,23 @@ export default {
       this.reset()
     },
 
+    currentSection() {
+      if (
+        (this.isTVShow && this.displayedSequences.length === 0) ||
+        this.displayedSequences[0]?.episode_id !== this.currentEpisode?.id
+      ) {
+        this.$refs['sequence-search-field'].setValue('')
+        this.$store.commit('SET_SEQUENCE_LIST_SCROLL_POSITION', 0)
+        this.initialLoading = false
+        this.reset()
+      }
+    },
+
     isSequencesLoading() {
       if (!this.isSequencesLoading) {
         let searchQuery = ''
         if (this.$route.query.search && this.$route.query.search.length > 0) {
-          searchQuery = '' + this.$route.query.search
+          searchQuery = `${this.$route.query.search}`
         }
         this.initialLoading = false
         this.$refs['sequence-search-field'].setValue(searchQuery)

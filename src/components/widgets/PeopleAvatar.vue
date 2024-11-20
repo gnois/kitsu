@@ -1,15 +1,9 @@
 <template>
   <span
     class="avatar has-text-centered"
-    :style="{
-      background: person.color,
-      width: size + 'px',
-      height: size + 'px',
-      'min-width': size + 'px',
-      'min-height': size + 'px',
-      'font-size': person.has_avatar ? 0 : fontSize + 'px'
-    }"
-    v-if="isLink"
+    :class="{ bot: person.is_bot }"
+    :style="style"
+    v-if="isLink && person.id"
   >
     <router-link
       :to="{
@@ -19,111 +13,98 @@
         }
       }"
       :title="person.full_name"
-      class="avatar-link"
     >
-      <img :src="avatarPath" v-if="person.has_avatar && noCache" />
-      <img v-lazy="avatarPath" :key="avatarKey" v-else-if="person.has_avatar" />
-      <span v-if="!person.has_avatar">
-        {{ initials }}
-      </span>
+      <img
+        :loading="isLazy ? 'lazy' : undefined"
+        alt=""
+        :src="person.avatarPath"
+        v-if="person.has_avatar"
+      />
+      <template v-else>{{ person.initials }}</template>
     </router-link>
   </span>
 
   <span
     class="avatar has-text-centered"
+    :class="{ bot: person.is_bot }"
     :title="person.full_name"
-    :style="{
-      background: person.color,
-      width: size + 'px',
-      height: size + 'px',
-      'font-size': fontSize + 'px'
-    }"
+    :style="style"
     v-else
   >
-    <img :src="avatarPath" v-if="person.has_avatar && noCache" />
-    <img v-lazy="avatarPath" :key="avatarKey" v-else-if="person.has_avatar" />
-    <span v-else>
-      {{ initials }}
-    </span>
+    <img
+      :loading="isLazy ? 'lazy' : undefined"
+      alt=""
+      :src="person.avatarPath"
+      v-if="person.has_avatar"
+    />
+    <template v-else>{{ person.initials }}</template>
   </span>
 </template>
 
 <script>
-export default {
-  name: 'person-avatar',
+import { mapGetters } from 'vuex'
 
-  data() {
-    return {
-      avatarPath: '',
-      avatarKey: '',
-      initials: ''
-    }
-  },
+export default {
+  name: 'people-avatar',
 
   props: {
     person: {
       type: Object,
-      default: () => ({
-        id: 'empty',
-        color: '#FFF'
-      })
+      required: true
     },
-    size: { type: Number, default: 40 },
-    'font-size': { type: Number, default: 18 },
-    'is-link': { type: Boolean, default: true },
-    'no-cache': { type: Boolean, default: false }
-  },
-
-  created() {
-    this.reloadAvatar()
-  },
-
-  methods: {
-    reloadAvatar() {
-      this.avatarPath =
-        this.person.avatarPath + '?unique=' + this.person.uniqueHash
-      this.avatarKey = this.person.id + '-' + this.person.uniqueHash
+    size: {
+      type: Number,
+      default: 40
+    },
+    fontSize: {
+      type: Number,
+      default: 18
+    },
+    isLink: {
+      type: Boolean,
+      default: true
+    },
+    isLazy: {
+      type: Boolean,
+      default: true
     }
   },
 
-  mounted() {
-    this.initials = this.person.initials
-  },
+  computed: {
+    ...mapGetters(['isDarkTheme']),
 
-  watch: {
-    person() {
-      this.reloadAvatar()
-    },
-
-    'person.uniqueHash'() {
-      this.reloadAvatar()
+    style() {
+      return {
+        color: this.isDarkTheme ? '#333' : '#FFF',
+        width: `${this.size}px`,
+        height: `${this.size}px`,
+        fontSize: this.person.has_avatar ? 0 : `${this.fontSize}px`,
+        backgroundColor: this.person.color
+      }
     }
   }
 }
 </script>
 
 <style lang="scss" scoped>
-.avatar img {
-  max-height: 100%;
-  height: 100%;
-  width: 100%;
-}
-
 .avatar {
-  border-radius: 50%;
-  color: white;
+  color: #333;
   display: flex;
   align-items: center;
+  font-weight: bold;
   justify-content: center;
-}
+  position: relative;
+  flex-shrink: 0;
 
-.avatar span {
-  flex: 1;
-}
+  a {
+    margin: 0;
+  }
 
-.avatar a {
-  margin: 0;
-  color: white;
+  img {
+    max-height: 100%;
+    height: 100%;
+    width: 100%;
+  }
 }
 
 .flexrow-item {

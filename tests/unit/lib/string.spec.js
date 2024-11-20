@@ -1,4 +1,4 @@
-import stringHelpers from '../../../src/lib/string'
+import stringHelpers from '@/lib/string'
 
 describe('lib/string', () => {
   it('generateNextName', () => {
@@ -23,9 +23,17 @@ describe('lib/string', () => {
     expect(stringHelpers.shortenText('long text', 0)).toEqual('...')
     expect(stringHelpers.shortenText('short text', 10)).toEqual('short text')
     expect(stringHelpers.shortenText('long text', 4)).toEqual('long...')
+    expect(stringHelpers.shortenText(null, 4)).toEqual('')
   })
 
   it('slugify', () => {
     expect(stringHelpers.slugify('text spécial', 0)).toEqual('text_special')
+  })
+
+  it('filenameWithoutExtension', () => {
+    expect(stringHelpers.filenameWithoutExtension('test')).toEqual('test')
+    expect(stringHelpers.filenameWithoutExtension('test.jpg')).toEqual('test')
+    expect(stringHelpers.filenameWithoutExtension('test.jpeg')).toEqual('test')
+    expect(stringHelpers.filenameWithoutExtension('test.test.jpg')).toEqual('test.test')
   })
 })

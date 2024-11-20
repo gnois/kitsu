@@ -2,7 +2,6 @@
  * Set of helpers to deal with annotation canvas. It's aimed at preview
  * widgets.
  */
-import { mapGetters } from 'vuex'
 import { fabric } from 'fabric'
 import { v4 as uuidv4 } from 'uuid'
 import moment from 'moment'
@@ -32,6 +31,7 @@ export const annotationMixin = {
   data() {
     return {
       fabricCanvas: null,
+      fabricCanvasComparison: null,
       lastAnnotationTime: '',
       additions: [],
       deletions: [],
@@ -46,19 +46,17 @@ export const annotationMixin = {
     this.resetUndoStacks()
   },
 
-  mounted() {},
-
-  beforeDestroy() {},
-
   computed: {
-    ...mapGetters([]),
-
     annotationCanvas() {
       return this.$refs['annotation-canvas'] // Canvas used by fabric
     }
   },
 
   methods: {
+    findAnnotation(list, time) {
+      return list.find(a => a.time < time + 0.0001 && a.time > time - 0.0001)
+    },
+
     // Objects
 
     /*
@@ -258,12 +256,14 @@ export const annotationMixin = {
     addToAdditions(obj) {
       this.markLastAnnotationTime()
       const currentTime = this.getCurrentTime()
-      const additions = this.additions.find(a => a.time === currentTime)
+      const currentFrame = this.getCurrentFrame()
+      const additions = this.findAnnotation(this.additions, currentTime)
       if (additions) {
         additions.drawing.objects.push(obj.serialize())
       } else {
         this.additions.push({
           time: currentTime,
+          frame: currentFrame,
           drawing: { objects: [obj.serialize()] }
         })
       }
@@ -282,7 +282,7 @@ export const annotationMixin = {
      */
     removeFromAdditions(obj) {
       const currentTime = this.getCurrentTime()
-      const additions = this.additions.find(a => a.time === currentTime)
+      const additions = this.findAnnotation(this.additions, currentTime)
       if (additions) {
         additions.drawing.objects = additions.drawing.objects.filter(
           o => o.id !== obj.id
@@ -296,19 +296,20 @@ export const annotationMixin = {
     addToDeletions(obj) {
       this.markLastAnnotationTime()
       const currentTime = this.getCurrentTime()
-      const deletion = this.deletions.find(d => d.time === currentTime)
+      const currentFrame = this.getCurrentFrame()
+      const deletion = this.findAnnotation(this.deletions, currentTime)
       if (deletion) {
         deletion.objects.push(obj.id)
       } else {
         this.deletions.push({
           time: currentTime,
+          frame: currentFrame,
           objects: [obj.id]
         })
       }
       if (!obj.serialize) {
         this.addSerialization(obj)
       }
-
       this.postAnnotationDeletion(currentTime, obj.serialize())
     },
 
@@ -324,7 +325,7 @@ export const annotationMixin = {
      */
     removeFromDeletions(obj) {
       const currentTime = this.getCurrentTime()
-      const deletions = this.deletions.find(a => a.time === currentTime)
+      const deletions = this.findAnnotation(this.deletions, currentTime)
       if (deletions) {
         deletions.objects = deletions.objects.filter(oId => oId !== obj.id)
       }
@@ -344,7 +345,8 @@ export const annotationMixin = {
     addToUpdatesSerializedObject(obj) {
       this.markLastAnnotationTime()
       const currentTime = this.getCurrentTime()
-      const updates = this.updates.find(a => a.time === currentTime)
+      const currentFrame = this.getCurrentFrame()
+      const updates = this.findAnnotation(this.updates, currentTime)
       if (updates) {
         updates.drawing.objects = updates.drawing.objects.filter(
           o => o.id !== obj.id
@@ -353,6 +355,7 @@ export const annotationMixin = {
       } else {
         this.updates.push({
           time: currentTime,
+          frame: currentFrame,
           drawing: { objects: [obj] }
         })
       }
@@ -404,7 +407,7 @@ export const annotationMixin = {
      *
      * Later it will be interesting to represent time in as a frame number.
      */
-    getNewAnnotations(currentTime, annotation) {
+    getNewAnnotations(currentTime, currentFrame, annotation) {
       this.fabricCanvas.getObjects().forEach(obj => {
         this.setObjectData(obj)
         if (obj.type === 'path') {
@@ -449,7 +452,8 @@ export const annotationMixin = {
       } else {
         if (!this.annotations || !this.annotations.push) this.annotations = []
         this.annotations.push({
-          time: currentTime,
+          time: Math.max(currentTime, 0),
+          frame: Math.max(currentFrame, 0),
           drawing: {
             objects: this.fabricCanvas._objects.map(obj => obj.serialize())
           }
@@ -468,9 +472,15 @@ export const annotationMixin = {
      * Load an annotation directly to the canvas by adding all its object
      * one by one to the canvas.
      */
-    loadSingleAnnotation(annotation) {
+    loadSingleAnnotation(annotation, canvas = null) {
       annotation.drawing.objects.forEach(obj => {
-        this.addObjectToCanvas(annotation, obj)
+        this.addObjectToCanvas(annotation, obj, canvas)
+      })
+    },
+
+    loadSingleAnnotationComparison(annotation) {
+      annotation.drawing.objects.forEach(obj => {
+        this.addObjectToCanvas(annotation, obj, this.fabricCanvasComparison)
       })
     },
 
@@ -490,28 +500,29 @@ export const annotationMixin = {
      *
      * @returns: the build object.
      */
-    addObjectToCanvas(annotation, obj) {
+    addObjectToCanvas(annotation, obj, canvas = null) {
       if (!obj) return
-      if (this.getObjectById(obj.id)) return
+      if (this.getObjectById(obj.id) && !canvas) return
+      if (!canvas) canvas = this.fabricCanvas
       let path, text
       let scaleMultiplierX = 1
       let scaleMultiplierY = 1
-      if (annotation && annotation.width) {
-        scaleMultiplierX = this.fabricCanvas.width / annotation.width
-        scaleMultiplierY = this.fabricCanvas.width / annotation.width
+      if (annotation?.width) {
+        scaleMultiplierX = canvas.width / annotation.width
+        scaleMultiplierY = canvas.width / annotation.width
       }
-      if (annotation && annotation.height) {
-        scaleMultiplierY = this.fabricCanvas.height / annotation.height
+      if (annotation?.height) {
+        scaleMultiplierY = canvas.height / annotation.height
       }
       const canvasWidth = obj.canvasWidth || annotation.width
       const canvasHeight = obj.canvasHeight
 
       if (canvasWidth) {
-        scaleMultiplierX = this.fabricCanvas.width / canvasWidth
-        scaleMultiplierY = this.fabricCanvas.width / canvasWidth
+        scaleMultiplierX = canvas.width / canvasWidth
+        scaleMultiplierY = canvas.width / canvasWidth
       }
       if (canvasHeight) {
-        scaleMultiplierY = this.fabricCanvas.height / canvasHeight
+        scaleMultiplierY = canvas.height / canvasHeight
       }
 
       const base = {
@@ -535,9 +546,9 @@ export const annotationMixin = {
       if (obj.type === 'path') {
         let strokeMultiplier = 1
         if (obj.canvasWidth) {
-          strokeMultiplier = canvasWidth / this.fabricCanvas.width
+          strokeMultiplier = canvasWidth / canvas.width
         }
-        if (this.fabricCanvas.width < 420) strokeMultiplier /= 2
+        if (canvas.width < 420) strokeMultiplier /= 2
         path = new fabric.Path(obj.path, {
           ...base
         })
@@ -558,7 +569,7 @@ export const annotationMixin = {
           mtr: !this.isCurrentUserArtist
         })
         this.$options.silentAnnnotation = true
-        this.fabricCanvas.add(path)
+        canvas.add(path)
         this.$options.silentAnnnotation = false
       } else if (obj.type === 'i-text' || obj.type === 'text') {
         text = new fabric.IText(obj.text, {
@@ -587,7 +598,7 @@ export const annotationMixin = {
           mtr: false
         })
         this.$options.silentAnnnotation = true
-        this.fabricCanvas.add(text)
+        canvas.add(text)
         this.$options.silentAnnnotation = false
       }
       return path || text
@@ -1016,12 +1027,16 @@ export const annotationMixin = {
       if (this.fabricCanvas) {
         this.fabricCanvas.clear()
       }
+      if (this.fabricCanvasComparison) {
+        this.fabricCanvasComparison.clear()
+      }
     },
 
     /*
      * Store selected annotations into the clipboard.
      */
     copyAnnotations() {
+      if (!this.fabricCanvas) return
       const activeObject = this.fabricCanvas.getActiveObject()
       if (activeObject) {
         activeObject.clone().then(cloned => {
@@ -1035,16 +1050,37 @@ export const annotationMixin = {
      * Paste annotations stored in the clipboard.
      */
     pasteAnnotations() {
+      if (!this.fabricCanvas) return
       this.fabricCanvas.discardActiveObject()
       const clonedObj = clipboard.pasteAnnotations()
       if (clonedObj._objects) {
-        clonedObj._objects.forEach(obj => this.addObject(obj))
+        clonedObj._objects.forEach(obj => {
+          obj = this.applyGroupChanges(clonedObj, obj)
+          obj.group = null
+          this.addObject(obj)
+        })
         this.fabricCanvas.requestRenderAll()
       } else if (clonedObj._set) {
         this.addObject(clonedObj)
         this.fabricCanvas.setActiveObject(clonedObj)
         this.fabricCanvas.requestRenderAll()
       }
+    },
+
+    applyGroupChanges(group, obj) {
+      if (obj.group) {
+        const point = new fabric.Point(obj.left, obj.top)
+        const transformedPoint = fabric.util.transformPoint(
+          point,
+          group.calcTransformMatrix()
+        )
+        obj.left = transformedPoint.x
+        obj.top = transformedPoint.y
+        obj.angle += group.angle
+        obj.scaleX *= group.scaleX
+        obj.scaleY *= group.scaleY
+      }
+      return obj
     },
 
     /*

@@ -20,11 +20,10 @@ export default {
 
   shortenText(text, maxLength) {
     let result = text || ''
-    if (text !== undefined && text.length > maxLength) {
+    if (text?.length > maxLength) {
       result = text.slice(0, maxLength) + '...'
       result = result.replace(/\n/g, ' ')
     }
-
     return result
   },
 
@@ -41,5 +40,13 @@ export default {
       .replace(/[^a-z0-9 -]/g, '')
       .replace(/\s+/g, '_')
       .replace(/-+/g, '_')
+  },
+
+  capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1)
+  },
+
+  filenameWithoutExtension(filename) {
+    return filename.replace(/\.[^/.]+$/, '')
   }
 }

@@ -20,13 +20,18 @@
                 :style="getValidationStyle(columnId)"
               >
                 <router-link
-                  class="flexrow-item"
+                  class="flexrow-item ellipsis"
+                  :title="taskTypeMap.get(columnId).name"
                   :to="taskTypePath(columnId)"
                   v-if="!isCurrentUserClient"
                 >
                   {{ taskTypeMap.get(columnId).name }}
                 </router-link>
-                <span class="flexrow-item" v-else>
+                <span
+                  class="flexrow-item ellipsis"
+                  :title="taskTypeMap.get(columnId).name"
+                  v-else
+                >
                   {{ taskTypeMap.get(columnId).name }}
                 </span>
               </div>
@@ -46,8 +51,8 @@
               :colors="chartColors('all', 'all')"
               :data="chartData('all', 'all')"
               :frames-data="chartData('all', 'all', 'frames')"
-              :countMode="countMode"
-              :displayMode="displayMode"
+              :count-mode="countMode"
+              :display-mode="displayMode"
             />
 
             <stats-cell
@@ -56,8 +61,8 @@
               :colors="chartColors('all', columnId)"
               :data="chartData('all', columnId)"
               :frames-data="chartData('all', columnId, 'frames')"
-              :countMode="countMode"
-              :displayMode="displayMode"
+              :count-mode="countMode"
+              :display-mode="displayMode"
               v-for="columnId in validationColumns"
             />
 
@@ -83,8 +88,8 @@
                 :colors="chartColors(entry.id, 'all')"
                 :data="chartData(entry.id, 'all')"
                 :frames-data="chartData(entry.id, 'all', 'frames')"
-                :countMode="countMode"
-                :displayMode="displayMode"
+                :count-mode="countMode"
+                :display-mode="displayMode"
                 v-if="isStats(entry.id, 'all')"
               />
               <td v-else></td>
@@ -95,8 +100,8 @@
                 :colors="chartColors(entry.id, columnId)"
                 :data="chartData(entry.id, columnId)"
                 :frames-data="chartData(entry.id, columnId, 'frames')"
-                :countMode="countMode"
-                :displayMode="displayMode"
+                :count-mode="countMode"
+                :display-mode="displayMode"
                 :label="chartLabel(entry.id, columnId)"
                 :label-color="chartLabelColor(entry.id, columnId)"
                 v-for="columnId in validationColumns"
@@ -127,8 +132,8 @@
                     :frames-data="
                       chartTakeData(entry.id, columnId, takeNumber, 'frames')
                     "
-                    :countMode="countMode"
-                    :displayMode="displayMode"
+                    :count-mode="countMode"
+                    :display-mode="displayMode"
                     v-if="
                       chartRetakeMaxCount(entry.id, columnId) + 1 > takeNumber
                     "
@@ -140,8 +145,8 @@
                     :colors="chartColors(entry.id, columnId)"
                     :data="chartData(entry.id, columnId)"
                     :frames-data="chartData(entry.id, columnId, 'frames')"
-                    :countMode="countMode"
-                    :displayMode="displayMode"
+                    :count-mode="countMode"
+                    :display-mode="displayMode"
                     v-else-if="
                       isStats(entry.id, columnId) &&
                       chartRetakeMaxCount(entry.id, columnId) + 1 === takeNumber
@@ -191,9 +196,9 @@
 </template>
 
 <script>
+import { ChevronDownIcon, ChevronRightIcon } from 'lucide-vue'
 import Vue from 'vue/dist/vue'
-import { mapGetters, mapActions } from 'vuex'
-import { ChevronDownIcon, ChevronRightIcon } from 'vue-feather-icons'
+import { mapGetters } from 'vuex'
 
 import { entityListMixin } from '@/components/mixins/entity_list'
 import { range } from '@/lib/time'
@@ -203,11 +208,13 @@ import {
   getChartRetakeCount,
   getRetakeChartData
 } from '@/lib/stats'
-import StatsCell from '@/components/cells/StatsCell'
-import TableInfo from '@/components/widgets/TableInfo'
+
+import StatsCell from '@/components/cells/StatsCell.vue'
+import TableInfo from '@/components/widgets/TableInfo.vue'
 
 export default {
-  name: 'episode-list',
+  name: 'episode-stats-list',
+
   mixins: [entityListMixin],
 
   components: {
@@ -254,7 +261,6 @@ export default {
 
   data() {
     return {
-      busy: false,
       expanded: {},
       lastSelection: null,
       takeLabelColors: ['#FB8C00', '#EF6C00', '#d35400', '#e74c3c', '#c0392b']
@@ -296,8 +302,6 @@ export default {
   },
 
   methods: {
-    ...mapActions(['displayMoreEpisodes']),
-
     chartColors(entryId, columnId) {
       if (this.isRetakes) {
         return ['#ff3860', '#6f727a', '#22d160']

@@ -38,7 +38,7 @@
 
           <div
             ref="valueList"
-            class="choice-value-wrapper"
+            class="choice-value-wrapper mb1"
             v-if="form.values.length"
           >
             <p class="choice-value" :key="value" v-for="value in form.values">
@@ -87,7 +87,7 @@
         </div>
 
         <div
-          class="departments"
+          class="departments mb2"
           v-if="form.departments.length || selectableDepartments.length"
         >
           <label class="label">
@@ -109,7 +109,7 @@
               v-model="selectedDepartment"
             />
             <button
-              class="button is-success flexrow-item mb2"
+              class="button is-success flexrow-item"
               :class="{
                 'is-disabled': selectedDepartment === null
               }"
@@ -141,33 +141,36 @@
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
+import { mapGetters } from 'vuex'
+
 import { modalMixin } from '@/components/modals/base_modal'
 import { descriptorMixin } from '@/components/mixins/descriptors'
+
 import { remove } from '@/lib/models'
 
-import Combobox from '@/components/widgets/Combobox'
-import ComboboxBoolean from '@/components/widgets/ComboboxBoolean'
-import ModalFooter from '@/components/modals/ModalFooter'
-import TextField from '@/components/widgets/TextField'
-import ComboboxDepartment from '@/components/widgets/ComboboxDepartment'
-import DepartmentName from '@/components/widgets/DepartmentName'
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import Checklist from '@/components/widgets/Checklist'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import Checklist from '@/components/widgets/Checklist.vue'
+import Combobox from '@/components/widgets/Combobox.vue'
+import ComboboxBoolean from '@/components/widgets/ComboboxBoolean.vue'
+import ComboboxDepartment from '@/components/widgets/ComboboxDepartment.vue'
+import DepartmentName from '@/components/widgets/DepartmentName.vue'
+import ModalFooter from '@/components/modals/ModalFooter.vue'
+import TextField from '@/components/widgets/TextField.vue'
 
 export default {
   name: 'add-metadata-modal',
+
   mixins: [descriptorMixin, modalMixin],
 
   components: {
+    ButtonSimple,
+    Checklist,
     Combobox,
     ComboboxBoolean,
     ComboboxDepartment,
     DepartmentName,
     ModalFooter,
-    TextField,
-    ButtonSimple,
-    Checklist
+    TextField
   },
 
   props: {
@@ -186,10 +189,6 @@ export default {
     isError: {
       type: Boolean,
       default: false
-    },
-    errorText: {
-      type: String,
-      default: ''
     },
     entityType: {
       type: String,
@@ -244,11 +243,10 @@ export default {
 
   computed: {
     ...mapGetters([
-      'departments',
-      'departmentMap',
       'currentProduction',
-      'taskTypeMap',
+      'departmentMap',
       'isCurrentUserSupervisor',
+      'taskTypeMap',
       'user'
     ]),
 
@@ -262,7 +260,7 @@ export default {
       let departments = this.currentProduction.task_types
         .map(taskTypeId => {
           const taskType = this.taskTypeMap.get(taskTypeId)
-          return taskType.for_entity === this.entityType
+          return taskType && taskType.for_entity === this.entityType
             ? this.departmentMap.get(taskType.department_id)
             : false
         })
@@ -302,15 +300,20 @@ export default {
   },
 
   methods: {
-    ...mapActions([]),
-
     addValue() {
       const newValue = this.$refs.addChoiceField.value
       if (!this.form.values.find(v => v === newValue) && newValue) {
         this.form.values.push(newValue)
+        if (this.form.data_type === 'taglist') {
+          this.form.values.sort()
+        }
         this.valueToAdd = ''
         this.$nextTick(() => {
-          this.valueList.scrollTop = this.valueList.scrollHeight
+          const newValueIndex = this.form.values.findIndex(v => v === newValue)
+          const newValuePosition =
+            (this.valueList.scrollHeight / this.form.values.length) *
+            newValueIndex
+          this.valueList.scrollTop = newValuePosition
         })
       }
       return newValue
@@ -374,6 +377,9 @@ export default {
         this.checklist = this.getDescriptorChecklistValues(
           this.descriptorToEdit
         )
+        if (this.form.data_type === 'taglist') {
+          this.form.values.sort()
+        }
       } else {
         this.form = {
           name: '',
@@ -402,10 +408,6 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-.dark .content .choice-value {
-  border-color: $grey-strong;
-}
-
 .dark .remove-button:hover {
   background: $grey-strong;
 }
@@ -428,14 +430,14 @@ export default {
 }
 
 .content .choice-value {
-  border: 1px solid $light-grey;
+  border: 1px solid var(--border);
   border-bottom: 0;
   margin: 0;
   padding: 0.5em;
 }
 
 .content .choice-value:last-child {
-  border-bottom: 1px solid $light-grey;
+  border-bottom: 1px solid var(--border);
 }
 
 .remove-button {

@@ -12,7 +12,7 @@
             class="remove-button flexrow-item"
             :title="$t('playlists.remove')"
             @click.prevent="onRemoveClick"
-            v-if="isCurrentUserManager"
+            v-if="isCurrentUserManager || isCurrentUserSupervisor"
           >
             <x-icon />
           </span>
@@ -23,16 +23,16 @@
           />
         </div>
 
-        <div class="entity-title">
-          <span
-            :style="{
-              color: taskStatus.color
-            }"
-            :title="taskStatus.name"
-          >
-            &bullet;
-          </span>
-          <span>{{ entity.parent_name }} / {{ entity.name }}</span>
+        <div
+          class="entity-title"
+          :title="taskStatus.name"
+          :style="{
+            'border-bottom': '2px solid ' + taskStatus.color,
+            'padding-bottom': '5px'
+          }"
+          @click.prevent="onPlayClick"
+        >
+          {{ entity.parent_name }} / {{ entity.name }}
         </div>
 
         <div class="preview-choice" v-if="taskTypeOptions.length > 0">
@@ -79,12 +79,12 @@
  * given prevision for a given task type for current entity.
  * It fires events about drag'n'drop reordering too.
  */
+import { XIcon } from 'lucide-vue'
 import firstBy from 'thenby'
 import { mapGetters } from 'vuex'
-import { XIcon } from 'vue-feather-icons'
 
-import Combobox from '@/components/widgets/Combobox'
-import LightEntityThumbnail from '@/components/widgets/LightEntityThumbnail'
+import Combobox from '@/components/widgets/Combobox.vue'
+import LightEntityThumbnail from '@/components/widgets/LightEntityThumbnail.vue'
 
 export default {
   name: 'playlisted-entity',
@@ -124,12 +124,11 @@ export default {
 
   computed: {
     ...mapGetters([
-      'assetMap',
-      'shotMap',
       'taskMap',
       'taskTypeMap',
       'taskStatusMap',
-      'isCurrentUserManager'
+      'isCurrentUserManager',
+      'isCurrentUserSupervisor'
     ]),
 
     dropArea() {
@@ -163,11 +162,7 @@ export default {
     },
 
     taskStatus() {
-      let entity = this.shotMap.get(this.entity.id)
-      if (!entity) entity = this.assetMap.get(this.entity.id)
-      if (!entity) return ''
-
-      const taskId = entity.validations.get(this.taskTypeId)
+      const taskId = this.entity.preview_file_task_id
       if (taskId) {
         const task = this.taskMap.get(taskId)
         if (!task) return ''
@@ -312,6 +307,10 @@ export default {
   min-width: 150px;
   padding: 4px 4px;
 
+  &:hover {
+    border: 3px solid var(--background-selectable);
+  }
+
   &.playing {
     border: 3px solid $green;
   }
@@ -319,6 +318,7 @@ export default {
 
 .entity-title {
   color: $white;
+  cursor: pointer;
   font-size: 0.9em;
   margin-bottom: 0.6em;
   max-width: 150px;
@@ -335,7 +335,7 @@ export default {
 }
 
 .field {
-  margin-bottom: 0em;
+  margin-bottom: 0;
 }
 
 .version-combo {

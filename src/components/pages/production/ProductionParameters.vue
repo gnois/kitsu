@@ -1,8 +1,7 @@
 <template>
   <div class="columns">
     <div class="column is-one-third box">
-      <!-- Form -->
-      <form class="form" v-on:submit.prevent>
+      <form class="form" @submit.prevent>
         <text-field
           ref="nameField"
           :label="$t('productions.fields.name')"
@@ -10,10 +9,20 @@
           v-focus
           v-model="form.name"
         />
+        <text-field
+          ref="codeField"
+          :label="$t('productions.fields.code')"
+          @enter="runConfirmation"
+          v-model="form.code"
+        />
         <div class="columns">
           <div class="mr1">
             <date-field
               ref="startDateField"
+              class="mb0"
+              :disabled-dates="{
+                from: form.end_date
+              }"
               :label="$t('productions.fields.start_date')"
               :short-date="true"
               v-model="form.start_date"
@@ -22,31 +31,47 @@
           <div>
             <date-field
               ref="endDateField"
+              class="mb0"
+              :disabled-dates="{
+                to: form.start_date
+              }"
               :label="$t('productions.fields.end_date')"
               :short-date="true"
               v-model="form.end_date"
             />
           </div>
         </div>
-        <combobox
+
+        <combobox-styled
           ref="productionTypeField"
-          localeKeyPrefix="productions.type."
+          class="mb2"
+          locale-key-prefix="productions.type."
           :label="$t('productions.fields.type')"
           :options="productionTypeOptions"
           @enter="runConfirmation"
           v-model="form.production_type"
         />
 
-        <text-field
+        <combobox-styled
+          ref="homepage"
+          class="mb2"
+          locale-key-prefix="productions.homepage."
+          :label="$t('productions.fields.homepage')"
+          :options="homepageOptions"
+          @enter="runConfirmation"
+          v-model="form.homepage"
+          v-if="currentProduction && currentProduction.id"
+        />
+
+        <!--text-field
           ref="nbEpisodesField"
           type="number"
           :step="1"
           :label="$t('productions.fields.nb_episodes')"
           @enter="runConfirmation"
-          v-focus
           v-model="form.nb_episodes"
           v-if="currentProduction && currentProduction.id && isLocalTVShow"
-        />
+        /-->
         <!--text-field
           ref="episodesSpanField"
           :label="$t('productions.fields.episode_span')"
@@ -63,7 +88,6 @@
           :step="0.001"
           :label="$t('productions.fields.fps')"
           @enter="runConfirmation"
-          v-focus
           v-model="form.fps"
           v-if="currentProduction && currentProduction.id"
         />
@@ -71,7 +95,6 @@
           ref="ratioField"
           :label="$t('productions.fields.ratio')"
           @enter="runConfirmation"
-          v-focus
           v-model="form.ratio"
           v-if="currentProduction && currentProduction.id"
         />
@@ -79,7 +102,6 @@
           ref="resolutionField"
           :label="$t('productions.fields.resolution')"
           @enter="runConfirmation"
-          v-focus
           v-model="form.resolution"
           v-if="currentProduction && currentProduction.id"
         />
@@ -87,7 +109,6 @@
           ref="isClientsIsolatedField"
           :label="$t('productions.fields.is_clients_isolated')"
           @enter="runConfirmation"
-          v-focus
           v-model="form.is_clients_isolated"
           v-if="currentProduction && currentProduction.id"
         />
@@ -95,8 +116,21 @@
           ref="isPreviewDownloadAllowed"
           :label="$t('productions.fields.is_preview_download_allowed')"
           @enter="runConfirmation"
-          v-focus
           v-model="form.is_preview_download_allowed"
+          v-if="currentProduction && currentProduction.id"
+        />
+        <combobox-boolean
+          ref="isSetPreviewAutomated"
+          :label="$t('productions.fields.is_set_preview_automated')"
+          @enter="runConfirmation"
+          v-model="form.is_set_preview_automated"
+          v-if="currentProduction && currentProduction.id"
+        />
+        <combobox-boolean
+          ref="isPublishDefault"
+          :label="$t('productions.fields.is_publish_default')"
+          @enter="runConfirmation"
+          v-model="form.is_publish_default_for_artists"
           v-if="currentProduction && currentProduction.id"
         />
         <text-field
@@ -105,11 +139,9 @@
           :step="1"
           :label="$t('productions.fields.max_retakes')"
           @enter="runConfirmation"
-          v-focus
           v-model="form.max_retakes"
           v-if="currentProduction && currentProduction.id"
         />
-
         <div v-if="currentProduction && currentProduction.id">
           <label class="label">{{ $t('productions.picture') }}</label>
           <file-upload
@@ -140,20 +172,21 @@
 <script>
 import { mapGetters, mapActions } from 'vuex'
 import { formatSimpleDate, parseSimpleDate } from '@/lib/time'
-import { PRODUCTION_TYPE_OPTIONS } from '@/lib/productions'
+import { PRODUCTION_TYPE_OPTIONS, HOME_PAGE_OPTIONS } from '@/lib/productions'
 
-import Combobox from '@/components/widgets/Combobox'
-import ComboboxBoolean from '@/components/widgets/ComboboxBoolean'
-import DateField from '@/components/widgets/DateField'
-import FileUpload from '@/components/widgets/FileUpload'
-import TextField from '@/components/widgets/TextField'
+import ComboboxBoolean from '@/components/widgets/ComboboxBoolean.vue'
+import ComboboxStyled from '@/components/widgets/ComboboxStyled.vue'
+import DateField from '@/components/widgets/DateField.vue'
+import FileUpload from '@/components/widgets/FileUpload.vue'
+import TextField from '@/components/widgets/TextField.vue'
 import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
 
 export default {
   name: 'production-parameters',
+
   components: {
-    Combobox,
     ComboboxBoolean,
+    ComboboxStyled,
     DateField,
     FileUpload,
     TextField,
@@ -167,8 +200,10 @@ export default {
       isError: false,
       isLocalTVShow: false,
       productionTypeOptions: PRODUCTION_TYPE_OPTIONS,
+      homepageOptions: HOME_PAGE_OPTIONS,
       form: {
         name: '',
+        code: '',
         start_date: new Date(),
         end_date: new Date(),
         nb_episodes: 0,
@@ -177,6 +212,8 @@ export default {
         max_retakes: 0,
         is_clients_isolated: 'false',
         is_preview_download_allowed: 'false',
+        is_set_preview_automated: 'false',
+        is_publish_default_for_artists: 'false',
         ratio: '',
         resolution: '',
         production_type: 'short'
@@ -242,6 +279,7 @@ export default {
       if (this.currentProduction) {
         this.form = {
           name: this.currentProduction.name,
+          code: this.currentProduction.code,
           start_date: parseSimpleDate(
             this.currentProduction.start_date
           ).toDate(),
@@ -258,12 +296,22 @@ export default {
             .is_preview_download_allowed
             ? 'true'
             : 'false',
+          is_set_preview_automated: this.currentProduction
+            .is_set_preview_automated
+            ? 'true'
+            : 'false',
+          is_publish_default_for_artists: this.currentProduction
+            .is_publish_default_for_artists
+            ? 'true'
+            : 'false',
           ratio: this.currentProduction.ratio,
-          resolution: this.currentProduction.resolution
+          resolution: this.currentProduction.resolution,
+          homepage: this.currentProduction.homepage
         }
       } else {
         this.form = {
           name: '',
+          code: '',
           start_date: new Date(),
           end_date: new Date(),
           production_type: 'short',
@@ -272,9 +320,12 @@ export default {
           max_retakes: 0,
           is_clients_isolated: 'false',
           is_preview_download_allowed: 'false',
+          is_set_preview_automated: 'false',
+          is_publish_default_for_artists: 'false',
           fps: '',
           ratio: '',
-          resolution: ''
+          resolution: '',
+          homepage: HOME_PAGE_OPTIONS[0].value
         }
       }
     },

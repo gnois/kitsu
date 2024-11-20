@@ -113,14 +113,11 @@ const actions = {
       .catch(console.error)
   },
 
-  loadMilestones({ commit, rootState }) {
-    const production = rootState.productions.currentProduction
-    return scheduleApi
-      .getMilestones(production)
-      .then(milestones => {
-        commit(ADD_MILESTONES, milestones)
-      })
-      .catch(console.error)
+  async loadMilestones({ commit, rootState }, production) {
+    const milestones = production
+      ? await scheduleApi.getMilestones(production)
+      : []
+    commit(ADD_MILESTONES, milestones)
   },
 
   saveMilestone({ commit, rootState }, milestone) {
@@ -132,22 +129,16 @@ const actions = {
           commit(ADD_MILESTONE, milestone)
         })
     } else {
-      return scheduleApi
-        .updateMilestone(milestone)
-        .then(milestone => {
-          commit(ADD_MILESTONE, milestone)
-        })
-        .catch(console.error)
+      return scheduleApi.updateMilestone(milestone).then(milestone => {
+        commit(ADD_MILESTONE, milestone)
+      })
     }
   },
 
-  deleteMilestone({ commit, rootState }, milestone) {
-    return scheduleApi
-      .deleteMilestone(milestone)
-      .then(() => {
-        commit(REMOVE_MILESTONE, milestone)
-      })
-      .catch(console.error)
+  deleteMilestone({ commit }, milestone) {
+    return scheduleApi.deleteMilestone(milestone).then(() => {
+      commit(REMOVE_MILESTONE, milestone)
+    })
   }
 }
 

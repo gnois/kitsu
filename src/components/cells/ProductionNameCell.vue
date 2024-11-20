@@ -7,21 +7,13 @@
     >
       <div
         class="flexrow-item avatar has-text-centered"
+        :style="style"
         v-if="withAvatar"
-        v-bind:style="{
-          background: getAvatarColor(entry),
-          width: size + 'px',
-          height: size + 'px',
-          'font-size': size - 15 + 'px',
-          'line-height': size + 'px'
-        }"
       >
-        <span v-if="!entry.has_avatar">
-          {{ generateAvatar(entry) }}
-        </span>
-        <span v-else>
-          <img :src="getThumbnailPath(entry)" />
-        </span>
+        <template v-if="!entry.has_avatar">
+          {{ generatedAvatar }}
+        </template>
+        <img :src="thumbnailPath" v-else />
       </div>
       <span class="flexrow-item" v-if="!onlyAvatar">
         {{ entry.name }}
@@ -30,21 +22,13 @@
     <div class="flexrow flexrow-item" v-else>
       <div
         class="flexrow-item avatar has-text-centered"
+        :style="style"
         v-if="withAvatar"
-        v-bind:style="{
-          background: getAvatarColor(entry),
-          width: size + 'px',
-          height: size + 'px',
-          'font-size': size - 15 + 'px',
-          'line-height': size + 'px'
-        }"
       >
-        <span v-if="!entry.has_avatar">
-          {{ generateAvatar(entry) }}
-        </span>
-        <span v-else>
-          <img :src="getThumbnailPath(entry)" />
-        </span>
+        <template v-if="!entry.has_avatar">
+          {{ generatedAvatar }}
+        </template>
+        <img :src="thumbnailPath" v-else />
       </div>
       <span class="flexrow-item" v-if="!onlyAvatar">
         {{ entry.name }}
@@ -54,8 +38,9 @@
 </template>
 
 <script>
+import { mapGetters } from 'vuex'
+
 import colors from '@/lib/colors.js'
-import { mapGetters, mapActions } from 'vuex'
 
 export default {
   name: 'production-name-cell',
@@ -92,54 +77,98 @@ export default {
   },
 
   computed: {
-    ...mapGetters([]),
+    ...mapGetters(['isCurrentUserClient']),
+
+    generatedAvatar() {
+      const firstLetter = this.entry.name?.[0] || 'P'
+      return firstLetter.toUpperCase()
+    },
 
     productionRoute() {
-      const route = {
-        name: this.lastProductionScreen,
-        params: {
-          production_id: this.entry.id
-        }
-      }
-      if (this.entry.first_episode_id) {
-        route.name = `episode-${this.lastProductionScreen}`
-        route.params.episode_id = this.entry.first_episode_id
-      }
-      return route
+      return this.sectionPath(this.entry, this.lastProductionScreen)
     },
 
     productionInfo() {
-      const fps = this.entry ? this.entry.fps : null
-      const ratio = this.entry ? this.entry.ratio : null
-      const resolution = this.entry ? this.entry.resolution : null
+      if (!this.isTooltip) {
+        return ''
+      }
+      const fps = this.entry?.fps
+      const ratio = this.entry?.ratio
+      const resolution = this.entry?.resolution
       const infos = []
-      if (fps) infos.push(`${this.$t('productions.fields.fps')}: ${fps}`)
-      if (ratio) infos.push(`${this.$t('productions.fields.ratio')}: ${ratio}`)
+      if (fps) {
+        infos.push(`${this.$t('productions.fields.fps')}: ${fps}`)
+      }
+      if (ratio) {
+        infos.push(`${this.$t('productions.fields.ratio')}: ${ratio}`)
+      }
       if (resolution) {
         infos.push(`${this.$t('productions.fields.resolution')}: ${resolution}`)
       }
-      if (infos.length > 0 && this.isTooltip) {
-        return infos.join(' - ')
-      } else {
-        return ''
+      return infos.join(' - ')
+    },
+
+    style() {
+      return {
+        background: colors.fromString(this.entry.name),
+        width: `${this.size}px`,
+        height: `${this.size}px`,
+        'font-size': `${this.size - 15}px`,
+        'line-height': `${this.size}px`
       }
+    },
+
+    thumbnailPath() {
+      return `/api/pictures/thumbnails/projects/${this.entry.id}.png`
     }
   },
 
   methods: {
-    ...mapActions([]),
-
-    generateAvatar(entry) {
-      const firstLetter = entry.name.length > 0 ? entry.name[0] : 'P'
-      return firstLetter.toUpperCase()
-    },
-
-    getAvatarColor(entry) {
-      return colors.fromString(entry.name)
-    },
-
-    getThumbnailPath(production) {
-      return `/api/pictures/thumbnails/projects/${production.id}.png`
+    sectionPath(production, section) {
+      const routeName = this.isCurrentUserClient
+        ? 'playlists'
+        : production.homepage || section
+      const route = {
+        name: routeName,
+        params: {
+          production_id: production.id
+        },
+        query: {}
+      }
+      if (production.production_type === 'tvshow') {
+        if (routeName !== 'episodes') {
+          route.name = `episode-${routeName}`
+        }
+        if (
+          !['edits', 'episodes'].includes(routeName) &&
+          production.first_episode_id
+        ) {
+          route.params.episode_id = production.first_episode_id
+        } else {
+          route.params.episode_id = 'all'
+        }
+      } else if (
+        production.production_type === 'shots' &&
+        routeName === 'assets'
+      ) {
+        route.name = 'shots'
+      } else if (
+        production.production_type === 'assets' &&
+        ['shots', 'sequences'].includes(routeName)
+      ) {
+        route.name = 'assets'
+      }
+      const isEntityPage = [
+        'assets',
+        'shots',
+        'edits',
+        'sequences',
+        'episodes'
+      ].includes(routeName)
+      if (isEntityPage) {
+        route.query.search = ''
+      }
+      return route
     }
   }
 }

@@ -38,16 +38,25 @@ export const PRODUCTION_STYLE_OPTIONS = [
   { label: 'ar', value: 'ar' }
 ]
 
+export const HOME_PAGE_OPTIONS = [
+  { label: 'assets', value: 'assets' },
+  { label: 'shots', value: 'shots' },
+  { label: 'sequences', value: 'sequences' }
+]
+
 export function getTaskTypePriorityOfProd(taskType, production) {
   if (!taskType) {
     return 1
-  } else if (
-    production &&
-    production.task_types_priority &&
-    production.task_types_priority[taskType.id]
-  ) {
-    return production.task_types_priority[taskType.id]
-  } else {
-    return taskType.priority
   }
+  const productionPriority = production?.task_types_priority?.[taskType.id]
+  return productionPriority || taskType.priority
+}
+
+export function getTaskStatusPriorityOfProd(taskStatus, production) {
+  if (!taskStatus) {
+    return 1
+  }
+  const productionPriority =
+    production?.task_statuses_link?.[taskStatus.id]?.priority
+  return productionPriority || taskStatus.priority
 }

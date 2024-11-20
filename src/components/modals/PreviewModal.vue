@@ -7,6 +7,9 @@
   >
     <div class="modal-background" @click="$emit('cancel')"></div>
     <div class="new-window">
+      <a class="mr1" :href="previewDlPath" v-if="previewFileId">
+        <arrow-down-icon />
+      </a>
       <a target="_blank" :href="previewPath">
         <arrow-up-right-icon />
       </a>
@@ -19,16 +22,19 @@
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
-import { modalMixin } from '@/components/modals/base_modal'
+import { ArrowDownIcon, ArrowUpRightIcon } from 'lucide-vue'
 
-import { ArrowUpRightIcon } from 'vue-feather-icons'
+import { getDownloadAttachmentPath } from '@/lib/path'
+
+import { modalMixin } from '@/components/modals/base_modal'
 
 export default {
   name: 'preview-modal',
+
   mixins: [modalMixin],
 
   components: {
+    ArrowDownIcon,
     ArrowUpRightIcon
   },
 
@@ -40,31 +46,31 @@ export default {
     previewFileId: {
       type: String,
       default: ''
+    },
+    attachment: {
+      type: Object,
+      default: () => {}
     }
-  },
-
-  mounted() {},
-
-  data() {
-    return {}
   },
 
   computed: {
-    ...mapGetters([]),
-
     previewPath() {
-      const id = this.previewFileId
-      return this.active && this.previewFileId
-        ? '/api/pictures/originals/preview-files/' + id + '.png'
-        : ''
+      if (this.previewFileId) {
+        const id = this.previewFileId
+        return this.active && this.previewFileId
+          ? '/api/pictures/originals/preview-files/' + id + '.png'
+          : ''
+      } else if (this.attachment) {
+        return getDownloadAttachmentPath(this.attachment)
+      }
+      return ''
+    },
+
+    previewDlPath() {
+      const previewId = this.previewFileId
+      return `/api/pictures/originals/preview-files/${previewId}/download`
     }
-  },
-
-  methods: {
-    ...mapActions([])
-  },
-
-  watch: {}
+  }
 }
 </script>
 

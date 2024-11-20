@@ -38,11 +38,11 @@
 </template>
 
 <script>
+import { ChevronDownIcon } from 'lucide-vue'
 import { mapGetters } from 'vuex'
-import { ChevronDownIcon } from 'vue-feather-icons'
 
-import ComboboxMask from '@/components/widgets/ComboboxMask'
-import TaskTypeName from '@/components/widgets/TaskTypeName'
+import ComboboxMask from '@/components/widgets/ComboboxMask.vue'
+import TaskTypeName from '@/components/widgets/TaskTypeName.vue'
 
 export default {
   name: 'combobox-task-type',
@@ -80,13 +80,17 @@ export default {
       default: false,
       type: Boolean
     },
+    placeholder: {
+      default: function () {
+        return this.$t('task_types.add_task_type_placeholder')
+      },
+      type: String
+    },
     openTop: {
       default: false,
       type: Boolean
     }
   },
-
-  mounted() {},
 
   computed: {
     ...mapGetters(['taskTypeMap']),
@@ -95,7 +99,7 @@ export default {
       if (this.value) {
         return this.taskTypeMap.get(this.value)
       } else if (this.addPlaceholder) {
-        return { name: '+ Task Type', color: '#E5E5E5', id: '' }
+        return { name: this.placeholder, color: '#E5E5E5', id: '' }
       } else {
         return this.taskTypeList[0]
       }
@@ -206,5 +210,9 @@ export default {
 
 .field .label {
   padding-top: 5px;
+}
+
+.task-type-name.no-link {
+  cursor: inherit;
 }
 </style>

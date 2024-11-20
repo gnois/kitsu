@@ -4,12 +4,13 @@
       {{ label }}
     </label>
     <div
+      class="department-combo"
       :class="{
-        'department-combo': true,
         opened: showDepartmentList,
-        rounded: rounded
+        rounded,
+        top
       }"
-      v-bind:style="{
+      :style="{
         width: width + 'px'
       }"
     >
@@ -25,18 +26,12 @@
       <div
         class="select-input"
         ref="select"
-        v-bind:style="{
-          'max-height': maxHeightSelectInput + 'px',
-          width: width + 'px',
-          top: rounded ? '30px' : '37px'
-        }"
+        :style="listStyle"
         v-if="showDepartmentList"
       >
         <div
           class="department-line"
-          v-for="department in departmentList.filter(
-            departement => departement.id !== this.value
-          )"
+          v-for="department in departmentList.filter(({ id }) => id !== value)"
           @click="selectDepartment(department)"
           :key="department.id"
         >
@@ -52,14 +47,15 @@
 </template>
 
 <script>
+import { ChevronDownIcon } from 'lucide-vue'
 import { mapGetters } from 'vuex'
-import { ChevronDownIcon } from 'vue-feather-icons'
 
-import ComboboxMask from '@/components/widgets/ComboboxMask'
-import DepartmentName from '@/components/widgets/DepartmentName'
+import ComboboxMask from '@/components/widgets/ComboboxMask.vue'
+import DepartmentName from '@/components/widgets/DepartmentName.vue'
 
 export default {
   name: 'combobox-department',
+
   components: {
     ChevronDownIcon,
     ComboboxMask,
@@ -73,37 +69,43 @@ export default {
   },
 
   props: {
+    displayAllAndMyDepartments: {
+      default: false,
+      type: Boolean
+    },
     label: {
       default: '',
       type: String
-    },
-    value: {
-      default: '',
-      type: String
-    },
-    selectableDepartments: {
-      type: Array,
-      required: false
     },
     maxHeightSelectInput: {
       default: 200,
       type: Number
     },
+    rounded: {
+      default: false,
+      type: Boolean
+    },
+    selectableDepartments: {
+      type: Array,
+      required: false
+    },
+    value: {
+      default: '',
+      type: String
+    },
     width: {
       default: 250,
       type: Number
     },
-    dispayAllAndMyDepartments: {
-      default: false,
+    withEmptyChoice: {
+      default: true,
       type: Boolean
     },
-    rounded: {
+    top: {
       default: false,
       type: Boolean
     }
   },
-
-  mounted() {},
 
   computed: {
     ...mapGetters([
@@ -118,11 +120,15 @@ export default {
       const departments = this.selectableDepartments
         ? [...this.selectableDepartments]
         : [...this.departments]
-      return departments.sort((a, b) => a.name.localeCompare(b.name))
+      return departments.sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, {
+          numeric: true
+        })
+      )
     },
 
     departmentList() {
-      if (this.dispayAllAndMyDepartments) {
+      if (this.displayAllAndMyDepartments) {
         const departmentFilter = [
           {
             name: this.$t('tasks.combobox_departments.all_departments'),
@@ -143,11 +149,17 @@ export default {
         this.user.departments.length > 0
       ) {
         return [...this.departmentsToTakeAccount]
-      } else {
+      } else if (this.withEmptyChoice) {
         return [
-          { name: '---', id: null, color: '#000000' },
+          {
+            color: '#AAA',
+            id: null,
+            name: this.$t('departments.no_department')
+          },
           ...this.departmentsToTakeAccount
         ]
+      } else {
+        return [...this.departmentsToTakeAccount]
       }
     },
 
@@ -162,6 +174,27 @@ export default {
       } else {
         return this.departmentList[0]
       }
+    },
+
+    listStyle() {
+      const data = {
+        'max-height': `${this.maxHeightSelectInput}px`,
+        width: `${this.width}px`,
+        top: this.rounded ? '31px' : '37px',
+        left: '0'
+      }
+      if (this.top) {
+        Object.assign(data, {
+          top: '-200px',
+          bottom: '-90px',
+          'border-top-left-radius': '10px',
+          'border-top-right-radius': '10px',
+          'border-bottom-left-radius': '0',
+          'border-bottom-right-radius': '0'
+        })
+      }
+
+      return data
     }
   },
 
@@ -193,9 +226,6 @@ export default {
   }
 }
 
-.department-line {
-}
-
 .department-combo {
   background: $white;
   border: 1px solid $light-grey-light;
@@ -205,6 +235,17 @@ export default {
   margin: 0;
   padding: 0.15em;
   position: relative;
+
+  &.opened {
+    &.top {
+      border-top-left-radius: 0;
+      border-top-right-radius: 0;
+    }
+    &:not(.top) {
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+  }
 }
 
 .department-combo:hover {
@@ -254,17 +295,16 @@ export default {
 }
 
 .rounded {
-  border-radius: 20px;
+  border-radius: 10px;
 
   &.opened {
-    border-bottom-left-radius: 0px;
-    border-bottom-right-radius: 0px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
   }
 
   .selected-department-line {
-    padding-top: 0px;
-
-    padding-bottom: 0px;
+    padding-top: 0;
+    padding-bottom: 0;
     border-radius: 50px;
   }
 }

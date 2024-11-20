@@ -19,7 +19,7 @@
               v-focus
             />
             <span class="icon">
-              <lock-icon width="20" height="20" />
+              <lock-icon :size="20" />
             </span>
           </p>
           <p class="control has-icon">
@@ -31,7 +31,7 @@
               v-model="password2"
             />
             <span class="icon">
-              <lock-icon width="20" height="20" />
+              <lock-icon :size="20" />
             </span>
           </p>
         </div>
@@ -77,13 +77,13 @@
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
+import { LockIcon } from 'lucide-vue'
+import { mapActions } from 'vuex'
 
-import { LockIcon } from 'vue-feather-icons'
 import auth from '@/lib/auth'
 
 export default {
-  name: 'reset-password',
+  name: 'reset-change-password',
 
   components: {
     LockIcon
@@ -106,10 +106,6 @@ export default {
     this.isLoading = false
     this.isError = false
     this.secondsLeft = 5
-  },
-
-  computed: {
-    ...mapGetters([])
   },
 
   methods: {

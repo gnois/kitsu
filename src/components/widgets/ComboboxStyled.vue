@@ -1,21 +1,27 @@
 <template>
-  <div>
-    <label class="label" v-if="label.length > 0">
+  <div :class="{ active }">
+    <label class="label" v-if="label.length">
       {{ label }}
     </label>
     <div
       :class="{
         combo: true,
         thin: thin,
+        compact: isCompact,
         reversed: isReversed,
         open: showList
       }"
       ref="select"
       @click="toggleList"
     >
-      <div class="flexrow">
-        <div class="selected-line flexrow-item">
-          {{ selectedOption ? getOptionLabel(selectedOption) : '' }}
+      <div class="flexrow" :title="selectedOptionLabel">
+        <slot name="icon"></slot>
+        <div
+          class="selected-line flexrow-item"
+          :class="{ placeholder: selectedOption?.placeholder }"
+          v-if="!isCompact"
+        >
+          {{ selectedOptionLabel }}
         </div>
         <chevron-down-icon class="down-icon flexrow-item" />
       </div>
@@ -23,6 +29,7 @@
         <div
           :key="option.id"
           class="option-line flexrow"
+          :class="{ placeholder: option.placeholder }"
           @click="selectOption(option)"
           @click.middle="openRoute(option)"
           v-for="option in optionList"
@@ -37,7 +44,7 @@
             no-preview
             v-if="isPreview"
           />
-          {{ getOptionLabel(option) }}
+          {{ option.optionLabel ?? getOptionLabel(option) }}
         </div>
       </div>
     </div>
@@ -52,8 +59,8 @@
 </template>
 
 <script>
-import { mapGetters } from 'vuex'
-import { ChevronDownIcon } from 'vue-feather-icons'
+import { ChevronDownIcon } from 'lucide-vue'
+
 import EntityThumbnail from '@/components/widgets/EntityThumbnail.vue'
 
 export default {
@@ -75,6 +82,10 @@ export default {
   },
 
   props: {
+    active: {
+      default: false,
+      type: Boolean
+    },
     label: {
       default: '',
       type: String
@@ -85,11 +96,15 @@ export default {
     },
     value: {
       default: '',
-      type: String
+      type: [String, Object]
     },
     localeKeyPrefix: {
       default: '',
       type: String
+    },
+    isCompact: {
+      default: false,
+      type: Boolean
     },
     isPreview: {
       default: false,
@@ -99,41 +114,40 @@ export default {
       default: false,
       type: Boolean
     },
+    keepOrder: {
+      default: false,
+      type: Boolean
+    },
     thin: {
       default: false,
       type: Boolean
     }
   },
 
-  mounted() {
-    if (this.options.length > 0) {
-      this.selectedOption = this.options[0]
-    }
-  },
-
   computed: {
-    ...mapGetters(['isDarkTheme']),
-
     optionList() {
-      if (this.isReversed) {
+      if (this.isReversed && !this.keepOrder) {
         return [...this.options].reverse()
-      } else {
-        return this.options
       }
+      return this.options
+    },
+
+    selectedOptionLabel() {
+      return this.selectedOption ? this.getOptionLabel(this.selectedOption) : ''
     }
   },
 
   methods: {
-    selectOption(option) {
-      this.$emit('input', option.value)
-      this.$emit('change', option.value)
-      this.selectedOption = option
-    },
-
     openRoute(option) {
       const ahref = this.$router.resolve(option.route).href
       const url = `${window.location.protocol}//${window.location.host}${ahref}`
       window.open(url, '_blank')
+    },
+
+    selectOption(option) {
+      this.$emit('input', option.value)
+      this.$emit('change', option.value)
+      this.selectedOption = option
     },
 
     toggleList() {
@@ -149,28 +163,26 @@ export default {
     },
 
     getOptionLabel(option) {
-      if (this.localeKeyPrefix.length > 0) {
+      if (this.localeKeyPrefix && option.label) {
         return this.$t(this.localeKeyPrefix + option.label.toLowerCase())
-      } else {
-        return option.label
       }
+      return option.label
     }
   },
 
   watch: {
-    options() {
-      if (this.options.length > 0) {
-        const option = this.options.find(o => o.value === this.value)
-        if (option) {
-          this.selectedOption = option
-        } else {
-          this.selectedOption = this.options[0]
+    options: {
+      immediate: true,
+      handler() {
+        if (this.options.length > 0) {
+          const option = this.options.find(({ value }) => value === this.value)
+          this.selectedOption = option || this.options[0]
         }
       }
     },
 
     showList() {
-      if (this.showList) {
+      if (this.showList && this.isReversed) {
         this.$nextTick(() => {
           let list = null
           for (const child of this.$refs.select.children) {
@@ -191,6 +203,15 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+[disabled] {
+  pointer-events: none;
+  opacity: 0.5;
+
+  .down-icon {
+    color: $white;
+  }
+}
+
 .dark {
   .select-input,
   .selected-line,
@@ -221,8 +242,8 @@ export default {
   vertical-align: middle;
 
   &.open {
-    border-bottom-left-radius: 0em;
-    border-bottom-right-radius: 0em;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
   }
 }
 
@@ -232,6 +253,9 @@ export default {
 
 .selected-line {
   flex: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 .option-line {
@@ -241,10 +265,16 @@ export default {
   margin: 0;
   padding: 0.5em;
   min-width: 150px;
-  width: inherit;
 
   &:hover {
     background: $purple;
+  }
+}
+
+.option-line,
+.selected-line {
+  &.placeholder {
+    color: rgba($white, 0.5);
   }
 }
 
@@ -253,7 +283,6 @@ export default {
   min-width: 15px;
   margin-right: 0.4em;
   color: $green;
-  cursor: pointer;
 }
 
 .select-input {
@@ -273,6 +302,7 @@ export default {
 
   .option-line {
     padding-right: 27px;
+    white-space: nowrap;
   }
 }
 
@@ -300,8 +330,8 @@ export default {
 
 .reversed {
   &.open {
-    border-top-left-radius: 0em;
-    border-top-right-radius: 0em;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
     border-bottom-left-radius: 1em;
     border-bottom-right-radius: 1em;
   }
@@ -309,8 +339,8 @@ export default {
   .select-input {
     border-top-left-radius: 1em;
     border-top-right-radius: 1em;
-    border-bottom-left-radius: 0em;
-    border-bottom-right-radius: 0em;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
     height: 180px;
     top: -180px;
   }

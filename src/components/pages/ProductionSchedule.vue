@@ -8,9 +8,11 @@
           </label>
           <datepicker
             wrapper-class="datepicker"
-            input-class="date-input input"
+            input-class="date-input input short"
             :language="locale"
-            :disabled-dates="{ days: [6, 0] }"
+            :disabled-dates="{
+              from: selectedEndDate
+            }"
             :monday-first="true"
             format="yyyy-MM-dd"
             v-model="selectedStartDate"
@@ -22,22 +24,25 @@
           </label>
           <datepicker
             wrapper-class="datepicker"
-            input-class="date-input input"
+            input-class="date-input input short"
             :language="locale"
-            :disabled-dates="{ days: [6, 0] }"
+            :disabled-dates="{
+              to: selectedStartDate
+            }"
             :monday-first="true"
             format="yyyy-MM-dd"
             v-model="selectedEndDate"
           />
         </div>
+        <!--
         <text-field
           class="flexrow-item overall-man-days"
           type="number"
           v-model="overallManDays"
           :label="$t('schedule.overall_man_days')"
           :disabled="!isCurrentUserAdmin"
-          v-show="false"
         />
+        -->
         <combobox-number
           class="flexrow-item zoom-level"
           :label="$t('schedule.zoom_level')"
@@ -83,10 +88,9 @@ import { sortTaskTypeScheduleItems } from '@/lib/sorting'
 import { getTaskTypeSchedulePath } from '@/lib/path'
 import { daysToMinutes, parseDate } from '@/lib/time'
 
-import ComboboxNumber from '@/components/widgets/ComboboxNumber'
-import TaskInfo from '@/components/sides/TaskInfo'
-import TextField from '@/components/widgets/TextField'
-import Schedule from '@/components/pages/schedule/Schedule'
+import ComboboxNumber from '@/components/widgets/ComboboxNumber.vue'
+import Schedule from '@/components/widgets/Schedule.vue'
+import TaskInfo from '@/components/sides/TaskInfo.vue'
 
 export default {
   name: 'production-schedule',
@@ -94,14 +98,13 @@ export default {
     ComboboxNumber,
     Datepicker,
     Schedule,
-    TaskInfo,
-    TextField
+    TaskInfo
   },
 
   data() {
     return {
       currentTask: null,
-      overallManDays: 0,
+      // overallManDays: 0,
       endDate: moment().add(6, 'months').endOf('day'),
       scheduleItems: [],
       startDate: moment().startOf('day'),
@@ -155,7 +158,6 @@ export default {
       'editProduction',
       'loadAssetTypeScheduleItems',
       'loadEpisodeScheduleItems',
-      'loadMilestones',
       'loadScheduleItems',
       'loadSequenceScheduleItems',
       'saveScheduleItem'
@@ -222,7 +224,6 @@ export default {
           )
           this.loading.schedule = false
         })
-        .then(this.loadMilestones)
         .catch(err => {
           console.error(err)
           this.loading.schedule = false
@@ -236,7 +237,7 @@ export default {
       if (this.currentProduction.end_date) {
         this.endDate = parseDate(this.currentProduction.end_date)
       }
-      this.overallManDays = this.currentProduction.man_days
+      // this.overallManDays = this.currentProduction.man_days
       this.selectedStartDate = this.startDate.toDate()
       this.selectedEndDate = this.endDate.toDate()
       this.loadData()
@@ -378,33 +379,43 @@ export default {
     }
   },
 
-  socket: {},
-
   watch: {
     selectedStartDate() {
       this.startDate = parseDate(this.selectedStartDate)
-      this.editProduction({
-        ...this.currentProduction,
-        start_date: this.startDate.format('YYYY-MM-DD')
-      })
+      const start_date = this.startDate.format('YYYY-MM-DD')
+      if (
+        this.currentProduction.start_date &&
+        this.currentProduction.start_date !== start_date
+      ) {
+        this.editProduction({
+          ...this.currentProduction,
+          start_date
+        })
+      }
     },
 
     selectedEndDate() {
       this.endDate = parseDate(this.selectedEndDate)
-      this.editProduction({
-        ...this.currentProduction,
-        end_date: this.endDate.format('YYYY-MM-DD')
-      })
-    },
-
-    overallManDays() {
-      if (this.overallManDays !== this.currentProduction.man_days) {
+      const end_date = this.endDate.format('YYYY-MM-DD')
+      if (
+        this.currentProduction.end_date &&
+        this.currentProduction.end_date !== end_date
+      ) {
         this.editProduction({
           ...this.currentProduction,
-          man_days: this.overallManDays
+          end_date
         })
       }
     },
+
+    // overallManDays() {
+    //   if (this.overallManDays !== this.currentProduction.man_days) {
+    //     this.editProduction({
+    //       ...this.currentProduction,
+    //       man_days: this.overallManDays
+    //     })
+    //   }
+    // },
 
     currentProduction() {
       this.reset()

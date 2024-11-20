@@ -172,7 +172,7 @@
 
               <table-metadata-selector-menu
                 ref="headerMetadataSelectorMenu"
-                :metadataDisplayHeaders.sync="metadataDisplayHeaders"
+                :metadata-display-headers.sync="metadataDisplayHeaders"
                 :descriptors="editMetadataDescriptors"
                 :exclude="{
                   timeSpent: !isEditTime,
@@ -183,7 +183,7 @@
               />
 
               <button-simple
-                class="is-small is-pulled-right"
+                class="is-small is-pulled-right mr05"
                 icon="down"
                 @click="toggleColumnSelector"
                 v-if="editMetadataDescriptors.length > 0 && isShowInfos"
@@ -308,7 +308,7 @@
                 'datatable-row-header': true
               }"
               :column="taskTypeMap.get(columnId)"
-              :columnY="j"
+              :column-y="j"
               :entity="edit"
               :is-assignees="isShowAssignations"
               :is-static="true"
@@ -318,7 +318,7 @@
                   : '0'
               "
               :minimized="hiddenColumns[columnId]"
-              :rowX="i"
+              :row-x="i"
               :selected="isSelected(i, j)"
               :sticked="true"
               :task-test="taskMap.get(edit.validations.get(columnId))"
@@ -396,8 +396,8 @@
               :selected="
                 isSelected(i, j + stickedDisplayedValidationColumns.length)
               "
-              :rowX="i"
-              :columnY="j"
+              :row-x="i"
+              :column-y="j"
               :is-assignees="isShowAssignations"
               @select="onTaskSelected"
               @unselect="onTaskUnselected"
@@ -467,21 +467,22 @@ import { entityListMixin } from '@/components/mixins/entity_list'
 import { formatListMixin } from '@/components/mixins/format'
 import { selectionListMixin } from '@/components/mixins/selection'
 
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import DescriptionCell from '@/components/cells/DescriptionCell'
-import EntityThumbnail from '@/components/widgets/EntityThumbnail'
-import MetadataHeader from '@/components/cells/MetadataHeader'
-import MetadataInput from '@/components/cells/MetadataInput'
-import RowActionsCell from '@/components/cells/RowActionsCell'
-import TableMetadataHeaderMenu from '@/components/widgets/TableMetadataHeaderMenu'
-import TableMetadataSelectorMenu from '@/components/widgets/TableMetadataSelectorMenu'
-import TableHeaderMenu from '@/components/widgets/TableHeaderMenu'
-import TableInfo from '@/components/widgets/TableInfo'
-import ValidationCell from '@/components/cells/ValidationCell'
-import ValidationHeader from '@/components/cells/ValidationHeader'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import DescriptionCell from '@/components/cells/DescriptionCell.vue'
+import EntityThumbnail from '@/components/widgets/EntityThumbnail.vue'
+import MetadataHeader from '@/components/cells/MetadataHeader.vue'
+import MetadataInput from '@/components/cells/MetadataInput.vue'
+import RowActionsCell from '@/components/cells/RowActionsCell.vue'
+import TableMetadataHeaderMenu from '@/components/widgets/TableMetadataHeaderMenu.vue'
+import TableMetadataSelectorMenu from '@/components/widgets/TableMetadataSelectorMenu.vue'
+import TableHeaderMenu from '@/components/widgets/TableHeaderMenu.vue'
+import TableInfo from '@/components/widgets/TableInfo.vue'
+import ValidationCell from '@/components/cells/ValidationCell.vue'
+import ValidationHeader from '@/components/cells/ValidationHeader.vue'
 
 export default {
   name: 'edit-list',
+
   mixins: [
     descriptorMixin,
     domMixin,
@@ -571,11 +572,13 @@ export default {
       'isTVShow',
       'nbSelectedTasks',
       'selectedEdits',
+      'edits',
       'editFilledColumns',
       'editMap',
       'editMetadataDescriptors',
       'editSearchText',
       'editSelectionGrid',
+      'selectedTasks',
       'taskMap',
       'taskTypeMap',
       'user'
@@ -792,6 +795,10 @@ export default {
     },
 
     isLoading() {
+      this.updateOffsets()
+    },
+
+    isBigThumbnails() {
       this.updateOffsets()
     }
   },

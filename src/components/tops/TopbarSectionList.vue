@@ -1,29 +1,34 @@
 <template>
   <div
+    class="topbar-menuitem"
     :class="{
-      'topbar-menuitem': true,
       'topbar-menuitem-open': showSectionList
     }"
   >
     <div class="section-menu">
-      <div class="flexrow unselectable root-menu" @click="toggleSectionList">
-        <div class="selected-section-line flexrow-item">
+      <div class="flexrow unselectable" @click="toggleSectionList">
+        <div class="selected-section-line flexrow-item flexrow">
+          <kitsu-icon class="section-icon" :name="currentSectionValue" />
           {{ currentSectionLabel }}
         </div>
         <chevron-down-icon class="down-icon flexrow-item" />
       </div>
       <div class="select-input" ref="select" v-if="showSectionList">
         <div
-          class="section-line"
-          v-for="(section, index) in sectionList"
-          @click="selectSection(section)"
           :key="section.value + '-' + index"
+          class="section-line"
+          @click="selectSection(section)"
+          v-for="(section, index) in sectionList"
         >
           <router-link
+            class="flexrow"
             :to="getSectionPath(section)"
             v-if="section.value !== 'separator'"
           >
-            {{ section.label }}
+            <kitsu-icon class="section-icon" :name="section.value" />
+            <span class="flexrow-item">
+              {{ section.label }}
+            </span>
           </router-link>
           <hr v-else />
         </div>
@@ -34,19 +39,21 @@
 </template>
 
 <script>
-import { mapGetters } from 'vuex'
-import { ChevronDownIcon } from 'vue-feather-icons'
+import { ChevronDownIcon } from 'lucide-vue'
+import { mapActions, mapGetters } from 'vuex'
 
 import { getProductionPath } from '@/lib/path'
 
-import ComboboxMask from '@/components/widgets/ComboboxMask'
+import ComboboxMask from '@/components/widgets/ComboboxMask.vue'
+import KitsuIcon from '@/components/widgets/KitsuIcon.vue'
 
 export default {
-  name: 'topbar-section-menu',
+  name: 'topbar-section-list',
 
   components: {
     ChevronDownIcon,
-    ComboboxMask
+    ComboboxMask,
+    KitsuIcon
   },
 
   data() {
@@ -82,11 +89,20 @@ export default {
       const section = this.localSection
       const sectionOption = this.sectionList.find(s => s.value === section)
       if (sectionOption) return sectionOption.label
-      else return null
+      return null
+    },
+
+    currentSectionValue() {
+      const section = this.localSection
+      const sectionOption = this.sectionList.find(s => s.value === section)
+      if (sectionOption) return sectionOption.value
+      return null
     }
   },
 
   methods: {
+    ...mapActions(['setCurrentSection', 'setLastProductionScreen']),
+
     selectSection(section) {
       if (section.value !== 'separator') {
         this.$emit('input', section.value)
@@ -111,7 +127,20 @@ export default {
 
   watch: {
     section() {
-      if (this.localSection !== this.section) this.localSection = this.section
+      if (this.localSection !== this.section) {
+        this.localSection = this.section
+      }
+    },
+
+    localSection() {
+      this.setCurrentSection(this.localSection)
+      if (
+        ['assets', 'episodes', 'sequences', 'shots', 'edits'].includes(
+          this.localSection
+        )
+      ) {
+        this.setLastProductionScreen(this.localSection)
+      }
     }
   }
 }
@@ -137,10 +166,6 @@ export default {
       color: $white;
     }
   }
-
-  .section-line:hover {
-    background: $dark-purple;
-  }
 }
 
 .selected-section-line {
@@ -164,14 +189,13 @@ export default {
 
   a {
     color: $black;
-    padding: 0.4em;
+    padding: 0.2em 0.4em;
     padding-right: 0.8em;
-    display: inline-block;
     width: 100%;
   }
 
   &:hover {
-    background: #eee;
+    background: var(--background-hover);
   }
 }
 
@@ -190,8 +214,8 @@ export default {
   border-bottom-left-radius: 5px;
   border-bottom-right-radius: 5px;
   margin-left: -6px;
-  max-height: 460px;
-  min-width: 180px;
+  max-height: min(80vh, 600px);
+  min-width: 200px;
   overflow-y: auto;
   padding: 5px;
   padding-bottom: 10px;
@@ -199,9 +223,6 @@ export default {
   text-align: left;
   top: 49px;
   z-index: 300;
-}
-
-.root-menu {
 }
 
 hr {
@@ -219,8 +240,14 @@ hr {
   border-radius: 10px;
 
   &.topbar-menuitem-open {
-    border-bottom-left-radius: 0px;
-    border-bottom-right-radius: 0px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
   }
+}
+
+.section-icon {
+  cursor: pointer;
+  margin-right: 0.8em;
+  width: 20px;
 }
 </style>

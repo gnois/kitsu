@@ -20,13 +20,18 @@
                 :style="getValidationStyle(columnId)"
               >
                 <router-link
-                  class="flexrow-item"
+                  class="flexrow-item ellipsis"
+                  :title="taskTypeMap.get(columnId).name"
                   :to="taskTypePath(columnId)"
                   v-if="!isCurrentUserClient"
                 >
                   {{ taskTypeMap.get(columnId).name }}
                 </router-link>
-                <span class="flexrow-item" v-else>
+                <span
+                  class="flexrow-item ellipsis"
+                  :title="taskTypeMap.get(columnId).name"
+                  v-else
+                >
                   {{ taskTypeMap.get(columnId).name }}
                 </span>
               </div>
@@ -45,8 +50,8 @@
               :colors="chartColors('all', 'all')"
               :data="chartData('all', 'all')"
               :frames-data="chartData('all', 'all', 'frames')"
-              :countMode="countMode"
-              :displayMode="displayMode"
+              :count-mode="countMode"
+              :display-mode="displayMode"
             />
 
             <stats-cell
@@ -55,8 +60,8 @@
               :colors="chartColors('all', columnId)"
               :data="chartData('all', columnId)"
               :frames-data="chartData('all', columnId, 'frames')"
-              :countMode="countMode"
-              :displayMode="displayMode"
+              :count-mode="countMode"
+              :display-mode="displayMode"
               v-for="columnId in validationColumns"
             />
 
@@ -77,8 +82,8 @@
               :colors="chartColors(entry.id, 'all')"
               :data="chartData(entry.id, 'all')"
               :frames-data="chartData(entry.id, 'all', 'frames')"
-              :countMode="countMode"
-              :displayMode="displayMode"
+              :count-mode="countMode"
+              :display-mode="displayMode"
               v-if="isStats(entry.id, 'all')"
             />
             <td v-else></td>
@@ -89,8 +94,8 @@
               :colors="chartColors(entry.id, columnId)"
               :data="chartData(entry.id, columnId)"
               :frames-data="chartData(entry.id, columnId, 'frames')"
-              :countMode="countMode"
-              :displayMode="displayMode"
+              :count-mode="countMode"
+              :display-mode="displayMode"
               v-if="isStats(entry.id, columnId)"
               v-for="columnId in validationColumns"
             />
@@ -131,15 +136,18 @@
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
+import { mapGetters } from 'vuex'
+
 import { getChartColors, getChartData } from '@/lib/stats'
+
 import { entityListMixin } from '@/components/mixins/entity_list'
 
-import TableInfo from '@/components/widgets/TableInfo'
-import StatsCell from '@/components/cells/StatsCell'
+import TableInfo from '@/components/widgets/TableInfo.vue'
+import StatsCell from '@/components/cells/StatsCell.vue'
 
 export default {
   name: 'sequence-stats-list',
+
   mixins: [entityListMixin],
 
   components: {
@@ -182,21 +190,12 @@ export default {
     }
   },
 
-  data() {
-    return {
-      busy: false,
-      lastSelection: null
-    }
-  },
-
   computed: {
     ...mapGetters([
       'currentProduction',
       'currentEpisode',
       'displayedSequencesLength',
-      'isDarkTheme',
       'isCurrentUserClient',
-      'isCurrentUserManager',
       'isTVShow',
       'sequenceSearchText',
       'taskTypeMap'
@@ -214,8 +213,6 @@ export default {
   },
 
   methods: {
-    ...mapActions([]),
-
     chartColors(entryId, columnId) {
       return getChartColors(this.sequenceStats, entryId, columnId)
     },

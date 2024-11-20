@@ -9,12 +9,16 @@ export default {
     return client.getModel('projects', productionId)
   },
 
-  getOpenProductions(callback) {
-    client.get('/api/data/projects/open', callback)
+  getOpenProductions() {
+    return client.pget('/api/data/projects/open')
   },
 
   getProductionStatus(callback) {
     client.get('/api/data/project-status', callback)
+  },
+
+  getProductionStats() {
+    return client.pget('/api/data/tasks/open-tasks/stats')
   },
 
   newProduction(production) {
@@ -24,6 +28,7 @@ export default {
   updateProduction(production) {
     const data = {
       name: production.name,
+      code: production.code,
       description: production.description,
       project_status_id: production.project_status_id,
       production_type: production.production_type,
@@ -39,7 +44,11 @@ export default {
       episode_span: production.episode_span,
       is_clients_isolated: production.is_clients_isolated === 'true',
       is_preview_download_allowed:
-        production.is_preview_download_allowed === 'true'
+        production.is_preview_download_allowed === 'true',
+      is_set_preview_automated: production.is_set_preview_automated === 'true',
+      is_publish_default_for_artists:
+        production.is_publish_default_for_artists === 'true',
+      homepage: production.homepage
     }
     return client.pput(`/api/data/projects/${production.id}`, data)
   },
@@ -76,6 +85,26 @@ export default {
     return client.pdel(path)
   },
 
+  addBackgroundToProduction(productionId, backgroundId) {
+    const data = { preview_background_file_id: backgroundId }
+    return client.ppost(
+      `/api/data/projects/${productionId}/settings/preview-background-files`,
+      data
+    )
+  },
+
+  removeBackgroundFromProduction(productionId, backgroundId) {
+    return client.pdel(
+      `/api/data/projects/${productionId}/settings/preview-background-files/${backgroundId}`
+    )
+  },
+
+  setDefaultBackgroundToProduction(productionId, backgroundId) {
+    return client.pput(`/api/data/projects/${productionId}`, {
+      default_preview_background_file_id: backgroundId
+    })
+  },
+
   addTaskTypeToProduction(productionId, taskTypeId, priority) {
     const data = { task_type_id: taskTypeId, priority }
     const path = `/api/data/projects/${productionId}/settings/task-types`
@@ -84,7 +113,7 @@ export default {
 
   removeTaskTypeFromProduction(productionId, taskTypeId) {
     const path = `/api/data/projects/${productionId}/settings/task-types/${taskTypeId}`
-    return client.pdel(path).catch(console.error)
+    return client.pdel(path)
   },
 
   addTaskStatusToProduction(productionId, taskStatusId) {

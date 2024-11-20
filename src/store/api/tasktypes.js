@@ -8,6 +8,8 @@ export default {
   newTaskType(taskType) {
     const data = {
       name: taskType.name,
+      short_name: taskType.short_name,
+      description: taskType.description,
       color: taskType.color,
       priority: Number(taskType.priority),
       for_entity: taskType.for_entity,
@@ -20,6 +22,8 @@ export default {
   updateTaskType(taskType) {
     const data = {
       name: taskType.name,
+      short_name: taskType.short_name,
+      description: taskType.description,
       color: taskType.color,
       department_id: taskType.department_id
     }
@@ -27,7 +31,10 @@ export default {
       data.priority = Number(taskType.priority)
     }
     if (taskType.allow_timelog !== undefined) {
-      data.allow_timelog = Boolean(taskType.allow_timelog === 'true')
+      data.allow_timelog = taskType.allow_timelog === 'true'
+    }
+    if (taskType.archived !== undefined) {
+      data.archived = taskType.archived === 'true'
     }
     return client.pput(`/api/data/task-types/${taskType.id}`, data)
   },

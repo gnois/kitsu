@@ -19,7 +19,8 @@
           :is-completed="hasValidName"
         >
           <text-field
-            input-class="w600 is-inline"
+            ref="nameField"
+            input-class=" is-inline"
             :placeholder="$t('productions.creation.placeholder_name')"
             v-model="productionToCreate.name"
           />
@@ -35,7 +36,7 @@
               class="flexrow-item"
               :options="productionTypeOptions"
               :label="$t('productions.fields.type')"
-              localeKeyPrefix="productions.type."
+              locale-key-prefix="productions.type."
               v-model="productionToCreate.settings.type"
               thin
               is-inline
@@ -44,7 +45,7 @@
               class="flexrow-item"
               :options="productionStyleOptions"
               :label="$t('productions.fields.style')"
-              localeKeyPrefix="productions.style."
+              locale-key-prefix="productions.style."
               v-model="productionToCreate.settings.style"
               thin
               is-inline
@@ -121,11 +122,13 @@
             <div class="date-picker-wrapper">
               <datepicker
                 wrapper-class="datepicker"
-                input-class=" is-small date-input input"
+                input-class="is-small date-input input"
                 label="Start date"
                 :placeholder="startDatePlaceholder"
                 :language="locale"
-                :disabled-dates="{ days: [6, 0] }"
+                :disabled-dates="{
+                  from: productionToCreate.settings.dateEnd
+                }"
                 :monday-first="true"
                 format="yyyy-MM-dd"
                 v-model="productionToCreate.settings.dateStart"
@@ -135,10 +138,11 @@
                 wrapper-class="datepicker"
                 input-class="is-small date-input input"
                 :language="locale"
-                :disabled-dates="{ days: [6, 0] }"
+                :disabled-dates="{
+                  to: productionToCreate.settings.dateStart
+                }"
                 :placeholder="endDatePlaceholder"
                 :monday-first="true"
-                :disabledDates="{ to: productionToCreate.settings.dateStart }"
                 format="yyyy-MM-dd"
                 v-model="productionToCreate.settings.dateEnd"
               />
@@ -155,7 +159,7 @@
           "
           :step="3"
           :is-completed="hasValidAssetTaskTypes"
-          v-if="productionToCreate.settings.type !== 'shots'"
+          v-if="!isShotsOnly"
         >
           <draggable
             v-model="productionToCreate.assetTaskTypes"
@@ -169,17 +173,18 @@
               @delete="deleteFromList(taskType, 'assetTaskTypes')"
               v-for="taskType in productionToCreate.assetTaskTypes"
             />
-            <combobox-task-type
-              slot="footer"
-              class="is-inline inline-task-type-combo"
-              :task-type-list="availableAssetTaskTypes"
-              add-placeholder
-              @input="
-                id =>
-                  productionToCreate.assetTaskTypes.push(taskTypeMap.get(id))
-              "
-              v-if="availableAssetTaskTypes.length > 0"
-            />
+            <template #footer>
+              <combobox-task-type
+                class="is-inline inline-task-type-combo"
+                :task-type-list="availableAssetTaskTypes"
+                add-placeholder
+                @input="
+                  id =>
+                    productionToCreate.assetTaskTypes.push(taskTypeMap.get(id))
+                "
+                v-if="availableAssetTaskTypes.length > 0"
+              />
+            </template>
           </draggable>
         </timeline-item>
         <timeline-item
@@ -187,12 +192,9 @@
           :subtitle="
             $t('productions.creation.select_shot_task_type_description')
           "
-          :step="4"
-          :is-completed="
-            hasValidShotTaskTypes ||
-            productionToCreate.settings.type === 'assets'
-          "
-          v-if="productionToCreate.settings.type !== 'assets'"
+          :step="isShotsOnly ? 3 : 4"
+          :is-completed="hasValidShotTaskTypes"
+          v-if="!isAssetsOnly"
         >
           <draggable
             v-model="productionToCreate.shotTaskTypes"
@@ -206,22 +208,24 @@
               deletable
               v-for="taskType in productionToCreate.shotTaskTypes"
             />
-            <combobox-task-type
-              slot="footer"
-              class="is-inline inline-task-type-combo"
-              :task-type-list="availableShotTaskTypes"
-              add-placeholder
-              @input="
-                id => productionToCreate.shotTaskTypes.push(taskTypeMap.get(id))
-              "
-              v-if="availableShotTaskTypes.length > 0"
-            />
+            <template #footer>
+              <combobox-task-type
+                class="is-inline inline-task-type-combo"
+                :task-type-list="availableShotTaskTypes"
+                add-placeholder
+                @input="
+                  id =>
+                    productionToCreate.shotTaskTypes.push(taskTypeMap.get(id))
+                "
+                v-if="availableShotTaskTypes.length > 0"
+              />
+            </template>
           </draggable>
         </timeline-item>
         <timeline-item
           :title="$t('productions.creation.select_task_status')"
           :subtitle="$t('productions.creation.select_task_status_description')"
-          :step="5"
+          :step="isShotsOnly || isAssetsOnly ? 4 : 5"
           :is-completed="hasValidTaskStatuses"
         >
           <div class="flexrow">
@@ -235,7 +239,6 @@
               v-for="taskStatus in productionToCreate.taskStatuses"
             />
             <combobox-status
-              slot="footer"
               class="flexrow-item"
               :task-status-list="availableTaskStatuses"
               :with-margin="false"
@@ -251,9 +254,9 @@
         <timeline-item
           :title="$t('productions.creation.add_asset_types')"
           :subtitle="$t('productions.creation.add_asset_types_description')"
-          :step="6"
+          :step="isAssetsOnly ? 5 : 6"
           :is-completed="hasValidAssetTypes"
-          v-if="productionToCreate.settings.type !== 'shots'"
+          v-if="!isShotsOnly"
         >
           <div class="flexrow asset-types mb1">
             <span
@@ -281,9 +284,11 @@
         <timeline-item
           :title="$t('productions.creation.add_assets')"
           :subtitle="$t('productions.creation.add_assets_description')"
-          :step="7"
+          :step="isAssetsOnly ? 6 : 7"
           :is-completed="hasValidAssets"
           :optional="true"
+          :is-last="isAssetsOnly"
+          v-if="!isShotsOnly"
         >
           <div class="import-content">
             <span class="tag mr1" v-if="nbAssetsToImport > 0">
@@ -301,10 +306,11 @@
         <timeline-item
           :title="$t('productions.creation.add_shots')"
           :subtitle="$t('productions.creation.add_shots_description')"
-          :step="8"
+          :step="isShotsOnly ? 5 : 8"
           :is-completed="hasValidShots"
           :optional="true"
           is-last
+          v-if="!isAssetsOnly"
         >
           <div class="import-content">
             <span class="tag mr1" v-if="nbShotsToImport > 0">
@@ -439,21 +445,22 @@ import {
   PRODUCTION_TYPE_OPTIONS
 } from '@/lib/productions'
 
-import Combobox from '@/components/widgets/Combobox'
-import ComboboxStyled from '@/components/widgets/ComboboxStyled'
-import ComboboxTaskType from '@/components/widgets/ComboboxTaskType'
-import ComboboxStatus from '@/components/widgets/ComboboxStatus'
-import ImportModal from '@/components/modals/ImportModal'
-import ImportRenderModal from '@/components/modals/ImportRenderModal'
-import ManageShotsModal from '@/components/modals/ManageShotsModal'
-import Spinner from '@/components/widgets/Spinner'
-import TaskTypeName from '@/components/widgets/TaskTypeName'
-import TextField from '@/components/widgets/TextField'
-import TimelineItem from '@/components/pages/production/TimelineItem'
-import ValidationTag from '@/components/widgets/ValidationTag'
+import Combobox from '@/components/widgets/Combobox.vue'
+import ComboboxStyled from '@/components/widgets/ComboboxStyled.vue'
+import ComboboxTaskType from '@/components/widgets/ComboboxTaskType.vue'
+import ComboboxStatus from '@/components/widgets/ComboboxStatus.vue'
+import ImportModal from '@/components/modals/ImportModal.vue'
+import ImportRenderModal from '@/components/modals/ImportRenderModal.vue'
+import ManageShotsModal from '@/components/modals/ManageShotsModal.vue'
+import Spinner from '@/components/widgets/Spinner.vue'
+import TaskTypeName from '@/components/widgets/TaskTypeName.vue'
+import TextField from '@/components/widgets/TextField.vue'
+import TimelineItem from '@/components/pages/production/TimelineItem.vue'
+import ValidationTag from '@/components/widgets/ValidationTag.vue'
 
 export default {
-  name: 'NewProduction',
+  name: 'new-production',
+
   components: {
     draggable,
     Combobox,
@@ -534,6 +541,10 @@ export default {
     }
   },
 
+  mounted() {
+    this.$refs.nameField.focus()
+  },
+
   computed: {
     ...mapGetters([
       'assetsCsvFormData',
@@ -552,6 +563,14 @@ export default {
 
     isTVShow() {
       return this.productionToCreate.settings.type === 'tvshow'
+    },
+
+    isAssetsOnly() {
+      return this.productionToCreate.settings.type === 'assets'
+    },
+
+    isShotsOnly() {
+      return this.productionToCreate.settings.type === 'shots'
     },
 
     assetsDataMatchers() {
@@ -667,10 +686,8 @@ export default {
     },
 
     hasValidType() {
-      return (
-        this.allowedProductionTypes.indexOf(
-          this.productionToCreate.settings.type
-        ) !== -1
+      return this.allowedProductionTypes.includes(
+        this.productionToCreate.settings.type
       )
     },
 
@@ -690,28 +707,26 @@ export default {
       return (
         this.hasValidName &&
         this.hasValidSettings &&
-        (this.hasValidAssetTaskTypes ||
-          this.productionToCreate.settings.type === 'shots') &&
-        (this.hasValidShotTaskTypes ||
-          this.productionToCreate.settings.type === 'assets') &&
+        (this.hasValidAssetTaskTypes || this.isShotsOnly) &&
+        (this.hasValidShotTaskTypes || this.isAssetsOnly) &&
         this.hasValidTaskStatuses &&
-        (this.hasValidAssetTypes ||
-          this.productionToCreate.settings.type === 'shots')
+        (this.hasValidAssetTypes || this.isShotsOnly)
       )
     },
 
     availableAssetTaskTypes() {
       return this.assetTaskTypes.filter(
         assetTaskType =>
-          this.productionToCreate.assetTaskTypes.indexOf(assetTaskType) === -1
+          !this.productionToCreate.assetTaskTypes.includes(assetTaskType) &&
+          !assetTaskType.archived
       )
     },
 
     availableAssetTypes() {
       const assetTypes = sortByName(
-        this.assetTypes.filter(assetType => {
-          return this.productionToCreate.assetTypes.indexOf(assetType) === -1
-        })
+        this.assetTypes.filter(
+          assetType => !this.productionToCreate.assetTypes.includes(assetType)
+        )
       )
       return [
         {
@@ -730,15 +745,17 @@ export default {
     availableShotTaskTypes() {
       return this.shotTaskTypes.filter(
         shotTaskType =>
-          this.productionToCreate.shotTaskTypes.indexOf(shotTaskType) === -1
+          !this.productionToCreate.shotTaskTypes.includes(shotTaskType) &&
+          !shotTaskType.archived
       )
     },
 
     availableTaskStatuses() {
       return this.taskStatus.filter(
         status =>
-          this.productionToCreate.taskStatuses.indexOf(status) === -1 &&
-          !status.is_default
+          !this.productionToCreate.taskStatuses.includes(status) &&
+          !status.is_default &&
+          !status.for_concept
       )
     },
 
@@ -882,6 +899,8 @@ export default {
       if (this.isTVShow) {
         params.episode_id = 'all'
         routeName = 'episode-assets'
+      } else if (this.isShotsOnly) {
+        routeName = 'shots'
       }
       return {
         name: routeName,
@@ -915,12 +934,11 @@ export default {
         }
         await this.loadContext()
         await this.$router.push(this.createProductionRoute(createdProduction))
-      } catch (error) {
-        console.error(error, error.response)
+      } catch (err) {
+        console.error(err)
         this.errors.creatingProduction = true
-        this.errors.creatingProductionError = error.response
-          ? ': ' + error.response.body.message.substring(0, 165)
-          : ''
+        this.errors.creatingProductionError =
+          err.body?.message?.substring(0, 165) ?? ''
       }
       this.loading.createProduction = false
     },
@@ -1023,11 +1041,8 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-.dark .tag {
-}
-
 .new-production {
-  font-family: 'Lato';
+  font-family: Lato;
 }
 
 .hero {
@@ -1110,14 +1125,11 @@ span.input-separator {
 }
 
 .flexrow-item.mr0 {
-  margin-right: 0em;
+  margin-right: 0;
 }
 
 .flexrow-item.mr05 {
   margin-right: 0.25em;
-}
-
-.import-button {
 }
 
 .asset-type-name {

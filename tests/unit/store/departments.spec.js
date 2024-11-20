@@ -1,4 +1,4 @@
-import store from '../../../src/store/modules/departments'
+import store from '@/store/modules/departments'
 
 const departments = [
   {
@@ -31,9 +31,9 @@ describe('Productions store', () => {
     test('departments', () => {
       expect(store.getters.departments(rootState)).toStrictEqual(departments)
     }),
-    test('getDepartments', () => {
+    test('getDepartment', () => {
       expect(
-        store.getters.getDepartments(rootState)(departments[0].id))
+        store.getters.getDepartment(rootState)(departments[0].id))
         .toStrictEqual(departments[0])
     })
   })
@@ -53,14 +53,14 @@ describe('Productions store', () => {
     }),
 
     test('EDIT_DEPARTMENTS_END', () => {
-      const newDepartement = {
+      const newDepartment = {
         name: 'NEW DEPARTMENT',
         id: 'newId',
         color: '#eeeeee'
       }
-      store.mutations.EDIT_DEPARTMENTS_END(rootState, newDepartement)
+      store.mutations.EDIT_DEPARTMENTS_END(rootState, newDepartment)
       const result = departments
-      result.push(newDepartement)
+      result.push(newDepartment)
       expect(rootState.departments).toEqual(result)
     }),
 

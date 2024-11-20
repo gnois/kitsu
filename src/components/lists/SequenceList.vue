@@ -100,6 +100,14 @@
               {{ $t('sequences.fields.description') }}
             </th>
 
+            <th
+              scope="col"
+              class="resolution"
+              v-if="isSequenceResolution && isShowInfos"
+            >
+              {{ $t('shots.fields.resolution') }}
+            </th>
+
             <metadata-header
               :key="descriptor.id"
               :descriptor="descriptor"
@@ -171,7 +179,7 @@
 
               <table-metadata-selector-menu
                 ref="headerMetadataSelectorMenu"
-                :metadataDisplayHeaders.sync="metadataDisplayHeaders"
+                :metadata-display-headers.sync="metadataDisplayHeaders"
                 :descriptors="sequenceMetadataDescriptors"
                 :exclude="{
                   timeSpent: !isSequenceTime,
@@ -182,7 +190,7 @@
               />
 
               <button-simple
-                class="is-small is-pulled-right"
+                class="is-small is-pulled-right mr05"
                 icon="down"
                 @click="toggleColumnSelector"
                 v-if="sequenceMetadataDescriptors.length > 0 && isShowInfos"
@@ -257,7 +265,7 @@
                 'datatable-row-header': true
               }"
               :column="taskTypeMap.get(columnId)"
-              :columnY="j"
+              :column-y="j"
               :entity="sequence"
               :is-assignees="isShowAssignations"
               :is-static="true"
@@ -267,7 +275,7 @@
                   : '0'
               "
               :minimized="hiddenColumns[columnId]"
-              :rowX="i"
+              :row-x="i"
               :selected="isSelected(i, j)"
               :sticked="true"
               :task-test="taskMap.get(sequence.validations.get(columnId))"
@@ -288,6 +296,37 @@
                 !isCurrentUserClient && isShowInfos && isSequenceDescription
               "
             />
+
+            <td class="resolution" v-if="isSequenceResolution && isShowInfos">
+              <input
+                :class="{
+                  'input-editor': true,
+                  error: !isValidResolution(sequence)
+                }"
+                :value="
+                  getMetadataFieldValue({ field_name: 'resolution' }, sequence)
+                "
+                @input="
+                  event =>
+                    onMetadataFieldChanged(
+                      sequence,
+                      { field_name: 'resolution' },
+                      event
+                    )
+                "
+                @keyup.ctrl="
+                  event =>
+                    onInputKeyUp(event, getIndex(i, k), descriptorLength + 3)
+                "
+                v-if="isCurrentUserManager"
+              />
+
+              <span class="metadata-value selectable" v-else>
+                {{
+                  getMetadataFieldValue({ field_name: 'resolution' }, sequence)
+                }}
+              </span>
+            </td>
 
             <!-- other Metadata cells -->
             <td
@@ -351,8 +390,8 @@
               :selected="
                 isSelected(i, j + stickedDisplayedValidationColumns.length)
               "
-              :rowX="i"
-              :columnY="j"
+              :row-x="i"
+              :column-y="j"
               :is-assignees="isShowAssignations"
               @select="onTaskSelected"
               @unselect="onTaskUnselected"
@@ -375,7 +414,7 @@
 
     <div
       class="has-text-centered"
-      v-if="isEmptyList && isCurrentUserClient && !isLoading"
+      v-if="isEmptyList && !isCurrentUserClient && !isLoading"
     >
       <p class="info">
         <img src="../../assets/illustrations/empty_shot.png" />
@@ -410,21 +449,22 @@ import { entityListMixin } from '@/components/mixins/entity_list'
 import { formatListMixin } from '@/components/mixins/format'
 import { selectionListMixin } from '@/components/mixins/selection'
 
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import DescriptionCell from '@/components/cells/DescriptionCell'
-import EntityThumbnail from '@/components/widgets/EntityThumbnail'
-import MetadataHeader from '@/components/cells/MetadataHeader'
-import MetadataInput from '@/components/cells/MetadataInput'
-import RowActionsCell from '@/components/cells/RowActionsCell'
-import TableMetadataHeaderMenu from '@/components/widgets/TableMetadataHeaderMenu'
-import TableMetadataSelectorMenu from '@/components/widgets/TableMetadataSelectorMenu'
-import TableHeaderMenu from '@/components/widgets/TableHeaderMenu'
-import TableInfo from '@/components/widgets/TableInfo'
-import ValidationCell from '@/components/cells/ValidationCell'
-import ValidationHeader from '@/components/cells/ValidationHeader'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import DescriptionCell from '@/components/cells/DescriptionCell.vue'
+import EntityThumbnail from '@/components/widgets/EntityThumbnail.vue'
+import MetadataHeader from '@/components/cells/MetadataHeader.vue'
+import MetadataInput from '@/components/cells/MetadataInput.vue'
+import RowActionsCell from '@/components/cells/RowActionsCell.vue'
+import TableMetadataHeaderMenu from '@/components/widgets/TableMetadataHeaderMenu.vue'
+import TableMetadataSelectorMenu from '@/components/widgets/TableMetadataSelectorMenu.vue'
+import TableHeaderMenu from '@/components/widgets/TableHeaderMenu.vue'
+import TableInfo from '@/components/widgets/TableInfo.vue'
+import ValidationCell from '@/components/cells/ValidationCell.vue'
+import ValidationHeader from '@/components/cells/ValidationHeader.vue'
 
 export default {
   name: 'sequence-list',
+
   mixins: [
     descriptorMixin,
     domMixin,
@@ -505,16 +545,19 @@ export default {
       'isSingleSequence',
       'isSequenceDescription',
       'isSequenceEstimation',
+      'isSequenceResolution',
       'isSequenceTime',
       'isShowAssignations',
       'isShowInfos',
       'nbSelectedTasks',
+      'selectedTasks',
       'sequenceMap',
       'sequenceFilledColumns',
       'sequenceMetadataDescriptors',
       'sequences',
       'sequenceSearchText',
       'sequenceSelectionGrid',
+      'sequences',
       'taskMap',
       'taskTypeMap',
       'user'
@@ -522,8 +565,8 @@ export default {
 
     isEmptyList() {
       return (
-        this.displayedSequences.length &&
-        this.displayedSequences[0].length === 0 &&
+        this.displayedSequences &&
+        this.displayedSequences.length === 0 &&
         !this.isLoading &&
         !this.isError &&
         (!this.sequenceSearchText || this.sequenceSearchText.length === 0)
@@ -617,6 +660,10 @@ export default {
 
     isLoading() {
       this.updateOffsets()
+    },
+
+    isBigThumbnails() {
+      this.updateOffsets()
     }
   }
 }
@@ -642,9 +689,8 @@ export default {
   }
 }
 
-.project {
-  min-width: 60px;
-  width: 60px;
+.datatable-wrapper {
+  min-height: 40px;
 }
 
 .actions {
@@ -687,6 +733,12 @@ th.actions {
   min-width: 70px;
   max-width: 70px;
   width: 70px;
+}
+
+td.resolution {
+  min-width: 110px;
+  max-width: 110px;
+  width: 110px;
 }
 
 td.name {

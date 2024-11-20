@@ -142,6 +142,14 @@
               {{ $t('main.status') }}
             </th>
 
+            <th
+              scope="col"
+              class="resolution selectable"
+              v-if="!isCurrentUserClient && isShowInfos && isEpisodeResolution"
+            >
+              {{ $t('shots.fields.resolution') }}
+            </th>
+
             <validation-header
               :key="columnId"
               :hidden-columns="hiddenColumns"
@@ -176,7 +184,7 @@
 
               <table-metadata-selector-menu
                 ref="headerMetadataSelectorMenu"
-                :metadataDisplayHeaders.sync="metadataDisplayHeaders"
+                :metadata-display-headers.sync="metadataDisplayHeaders"
                 :descriptors="episodeMetadataDescriptors"
                 :exclude="{
                   timeSpent: !isEpisodeTime,
@@ -187,7 +195,7 @@
               />
 
               <button-simple
-                class="is-small is-pulled-right"
+                class="is-small is-pulled-right mr05"
                 icon="down"
                 @click="toggleColumnSelector"
                 v-if="episodeMetadataDescriptors.length > 0 && isShowInfos"
@@ -262,7 +270,7 @@
                 'datatable-row-header': true
               }"
               :column="taskTypeMap.get(columnId)"
-              :columnY="j"
+              :column-y="j"
               :entity="episode"
               :is-assignees="isShowAssignations"
               :is-static="true"
@@ -272,7 +280,7 @@
                   : '0'
               "
               :minimized="hiddenColumns[columnId]"
-              :rowX="i"
+              :row-x="i"
               :selected="isSelected(i, j)"
               :sticked="true"
               :task-test="taskMap.get(episode.validations.get(columnId))"
@@ -357,6 +365,37 @@
               </span>
             </td>
 
+            <td class="resolution" v-if="isEpisodeResolution && isShowInfos">
+              <input
+                :class="{
+                  'input-editor': true,
+                  error: !isValidResolution(episode)
+                }"
+                :value="
+                  getMetadataFieldValue({ field_name: 'resolution' }, episode)
+                "
+                @input="
+                  event =>
+                    onMetadataFieldChanged(
+                      episode,
+                      { field_name: 'resolution' },
+                      event
+                    )
+                "
+                @keyup.ctrl="
+                  event =>
+                    onInputKeyUp(event, getIndex(i, k), descriptorLength + 3)
+                "
+                v-if="isCurrentUserManager"
+              />
+
+              <span class="metadata-value selectable" v-else>
+                {{
+                  getMetadataFieldValue({ field_name: 'resolution' }, episode)
+                }}
+              </span>
+            </td>
+
             <validation-cell
               :ref="`validation-${i}-${
                 j + stickedDisplayedValidationColumns.length
@@ -377,8 +416,8 @@
               :selected="
                 isSelected(i, j + stickedDisplayedValidationColumns.length)
               "
-              :rowX="i"
-              :columnY="j"
+              :row-x="i"
+              :column-y="j"
               :is-assignees="isShowAssignations"
               @select="onTaskSelected"
               @unselect="onTaskUnselected"
@@ -433,21 +472,22 @@ import { entityListMixin } from '@/components/mixins/entity_list'
 import { formatListMixin } from '@/components/mixins/format'
 import { selectionListMixin } from '@/components/mixins/selection'
 
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import DescriptionCell from '@/components/cells/DescriptionCell'
-import EntityThumbnail from '@/components/widgets/EntityThumbnail'
-import MetadataHeader from '@/components/cells/MetadataHeader'
-import MetadataInput from '@/components/cells/MetadataInput'
-import RowActionsCell from '@/components/cells/RowActionsCell'
-import TableMetadataHeaderMenu from '@/components/widgets/TableMetadataHeaderMenu'
-import TableMetadataSelectorMenu from '@/components/widgets/TableMetadataSelectorMenu'
-import TableHeaderMenu from '@/components/widgets/TableHeaderMenu'
-import TableInfo from '@/components/widgets/TableInfo'
-import ValidationCell from '@/components/cells/ValidationCell'
-import ValidationHeader from '@/components/cells/ValidationHeader'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import DescriptionCell from '@/components/cells/DescriptionCell.vue'
+import EntityThumbnail from '@/components/widgets/EntityThumbnail.vue'
+import MetadataHeader from '@/components/cells/MetadataHeader.vue'
+import MetadataInput from '@/components/cells/MetadataInput.vue'
+import RowActionsCell from '@/components/cells/RowActionsCell.vue'
+import TableMetadataHeaderMenu from '@/components/widgets/TableMetadataHeaderMenu.vue'
+import TableMetadataSelectorMenu from '@/components/widgets/TableMetadataSelectorMenu.vue'
+import TableHeaderMenu from '@/components/widgets/TableHeaderMenu.vue'
+import TableInfo from '@/components/widgets/TableInfo.vue'
+import ValidationCell from '@/components/cells/ValidationCell.vue'
+import ValidationHeader from '@/components/cells/ValidationHeader.vue'
 
 export default {
   name: 'episode-list',
+
   mixins: [
     descriptorMixin,
     domMixin,
@@ -540,10 +580,12 @@ export default {
       'isSingleEpisode',
       'isEpisodeDescription',
       'isEpisodeEstimation',
+      'isEpisodeResolution',
       'isEpisodeTime',
       'isShowAssignations',
       'isShowInfos',
       'nbSelectedTasks',
+      'selectedTasks',
       'taskMap',
       'taskTypeMap',
       'user'
@@ -660,6 +702,10 @@ export default {
     },
 
     isLoading() {
+      this.updateOffsets()
+    },
+
+    isBigThumbnails() {
       this.updateOffsets()
     }
   }
@@ -858,5 +904,11 @@ td .select {
 
 .metadata-value {
   padding: 0.8rem;
+}
+
+.resolution {
+  min-width: 110px;
+  max-width: 110px;
+  width: 110px;
 }
 </style>

@@ -53,7 +53,7 @@
 
 <script>
 export default {
-  name: 'combobox',
+  name: 'combobox-number',
 
   props: {
     label: {
@@ -82,8 +82,6 @@ export default {
     }
   },
 
-  computed: {},
-
   methods: {
     updateValue() {
       this.$emit('input', parseInt(this.$refs.select.value))
@@ -93,11 +91,10 @@ export default {
     },
 
     getOptionLabel(option) {
-      if (this.localeKeyPrefix.length > 0) {
+      if (this.localeKeyPrefix && option.label) {
         return this.$t(this.localeKeyPrefix + option.label.toLowerCase())
-      } else {
-        return option.label
       }
+      return option.label
     }
   }
 }

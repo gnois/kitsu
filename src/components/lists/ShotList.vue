@@ -216,7 +216,7 @@
 
               <table-metadata-selector-menu
                 ref="headerMetadataSelectorMenu"
-                :metadataDisplayHeaders.sync="metadataDisplayHeaders"
+                :metadata-display-headers.sync="metadataDisplayHeaders"
                 :descriptors="shotMetadataDescriptors"
                 namespace="shots"
                 :exclude="{
@@ -233,7 +233,7 @@
               />
 
               <button-simple
-                class="is-small is-pulled-right"
+                class="is-small is-pulled-right mr05"
                 icon="down"
                 @click="toggleColumnSelector"
                 v-if="isShowInfos"
@@ -309,7 +309,7 @@
               class="metadata-descriptor datatable-row-header"
               :title="shot.data ? shot.data[descriptor.field_name] : ''"
               :style="{
-                'z-index': 1000 - i, // Need for combo to be above the next cell
+                'z-index': 1000 - i - k * 100, // Needed for combo to be above the next cell
                 left: offsets['editor-' + j]
                   ? `${offsets['editor-' + j]}px`
                   : '0'
@@ -336,7 +336,7 @@
               }"
               :canceled="shot.canceled"
               :column="taskTypeMap.get(columnId)"
-              :columnY="j"
+              :column-y="j"
               :entity="shot"
               :is-assignees="isShowAssignations"
               :is-casting-ready="isCastingReady(shot, columnId)"
@@ -347,7 +347,7 @@
                   : '0'
               "
               :minimized="hiddenColumns[columnId]"
-              :rowX="getIndex(i, k)"
+              :row-x="getIndex(i, k)"
               :selected="isSelected(i, k, j)"
               :sticked="true"
               :task-test="taskMap.get(shot.validations.get(columnId))"
@@ -608,8 +608,8 @@
               :selected="
                 isSelected(i, k, j + stickedDisplayedValidationColumns.length)
               "
-              :rowX="getIndex(i, k)"
-              :columnY="j"
+              :row-x="getIndex(i, k)"
+              :column-y="j"
               :is-assignees="isShowAssignations"
               :is-casting-ready="isCastingReady(shot, columnId)"
               :casting-title="castingTitle(shot, columnId)"
@@ -687,21 +687,22 @@ import { entityListMixin } from '@/components/mixins/entity_list'
 import { formatListMixin } from '@/components/mixins/format'
 import { selectionListMixin } from '@/components/mixins/selection'
 
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import DescriptionCell from '@/components/cells/DescriptionCell'
-import EntityThumbnail from '@/components/widgets/EntityThumbnail'
-import MetadataHeader from '@/components/cells/MetadataHeader'
-import MetadataInput from '@/components/cells/MetadataInput'
-import RowActionsCell from '@/components/cells/RowActionsCell'
-import TableMetadataHeaderMenu from '@/components/widgets/TableMetadataHeaderMenu'
-import TableMetadataSelectorMenu from '@/components/widgets/TableMetadataSelectorMenu'
-import TableHeaderMenu from '@/components/widgets/TableHeaderMenu'
-import TableInfo from '@/components/widgets/TableInfo'
-import ValidationCell from '@/components/cells/ValidationCell'
-import ValidationHeader from '@/components/cells/ValidationHeader'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import DescriptionCell from '@/components/cells/DescriptionCell.vue'
+import EntityThumbnail from '@/components/widgets/EntityThumbnail.vue'
+import MetadataHeader from '@/components/cells/MetadataHeader.vue'
+import MetadataInput from '@/components/cells/MetadataInput.vue'
+import RowActionsCell from '@/components/cells/RowActionsCell.vue'
+import TableMetadataHeaderMenu from '@/components/widgets/TableMetadataHeaderMenu.vue'
+import TableMetadataSelectorMenu from '@/components/widgets/TableMetadataSelectorMenu.vue'
+import TableHeaderMenu from '@/components/widgets/TableHeaderMenu.vue'
+import TableInfo from '@/components/widgets/TableInfo.vue'
+import ValidationCell from '@/components/cells/ValidationCell.vue'
+import ValidationHeader from '@/components/cells/ValidationHeader.vue'
 
 export default {
   name: 'shot-list',
+
   mixins: [
     descriptorMixin,
     domMixin,
@@ -801,10 +802,12 @@ export default {
       'isTVShow',
       'nbSelectedTasks',
       'selectedShots',
+      'selectedTasks',
       'sequenceMap',
       'shotFilledColumns',
       'shotMap',
       'shotMetadataDescriptors',
+      'shots',
       'shotSearchText',
       'shotSelectionGrid',
       'taskMap',
@@ -916,6 +919,9 @@ export default {
     },
 
     isCastingReady(shot, columnId) {
+      if (!shot.nb_entities_out) {
+        return false
+      }
       const task = this.taskMap.get(shot.validations.get(columnId))
       return (
         task &&
@@ -925,6 +931,9 @@ export default {
     },
 
     castingTitle(shot, columnId) {
+      if (!shot.nb_entities_out) {
+        return ''
+      }
       const task = this.taskMap.get(shot.validations.get(columnId))
       return task
         ? task.nb_assets_ready + ' / ' + shot.nb_entities_out + ' assets ready'
@@ -1093,6 +1102,10 @@ export default {
 
     isLoading() {
       this.updateOffsets()
+    },
+
+    isBigThumbnails() {
+      this.updateOffsets()
     }
   },
 
@@ -1104,9 +1117,8 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-.project {
-  min-width: 60px;
-  width: 60px;
+.datatable-wrapper {
+  min-height: 40px;
 }
 
 .actions {
@@ -1230,67 +1242,6 @@ span.thumbnail-empty {
 
 .datatable-row-header {
   cursor: pointer;
-}
-
-.dark {
-  th .input-editor,
-  td .select select,
-  td .input-editor {
-    color: $white;
-
-    option {
-      background: $dark-grey-light;
-      color: $white;
-    }
-
-    &:focus,
-    &:active,
-    &:hover {
-      background: $dark-grey-light;
-    }
-  }
-}
-
-td.frames,
-td.framein,
-td.frameout,
-td.max-retakes,
-td.resolution,
-td.fps {
-  height: 3.1rem;
-  padding: 0;
-}
-
-th .input-editor,
-td .input-editor {
-  color: $grey-strong;
-  height: 100%;
-  padding: 0.5rem;
-  width: 100%;
-  background: transparent;
-  border: 1px solid transparent;
-  z-index: 100;
-
-  &:active,
-  &:focus,
-  &:hover {
-    background: transparent;
-    background: white;
-  }
-
-  &:active,
-  &:focus {
-    border: 1px solid $green;
-  }
-
-  &:hover {
-    border: 1px solid $light-green;
-  }
-
-  &:invalid,
-  &.error {
-    color: $red;
-  }
 }
 
 input[type='number']::-webkit-outer-spin-button,

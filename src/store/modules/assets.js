@@ -51,6 +51,7 @@ import {
   NEW_TASK_COMMENT_END,
   NEW_TASK_END,
   SET_ASSET_SEARCH,
+  SET_SHARED_ASSET_SEARCH,
   SET_CURRENT_PRODUCTION,
   DISPLAY_MORE_ASSETS,
   SET_PREVIEW,
@@ -64,6 +65,8 @@ import {
   SAVE_ASSET_SEARCH_END,
   REMOVE_ASSET_SEARCH_END,
   SET_ASSET_TYPE_SEARCH,
+  SAVE_ASSET_SEARCH_FILTER_GROUP_END,
+  REMOVE_ASSET_SEARCH_FILTER_GROUP_END,
   COMPUTE_ASSET_TYPE_STATS,
   UPDATE_METADATA_DESCRIPTOR_END,
   SET_CURRENT_EPISODE,
@@ -72,7 +75,9 @@ import {
   UNLOCK_ASSET,
   RESET_ALL,
   CLEAR_SELECTED_ASSETS,
-  SET_ASSET_SELECTION
+  SET_ASSET_SELECTION,
+  LOAD_SHARED_ASSETS_END,
+  LOAD_UNSHARED_ASSETS_END
 } from '@/store/mutation-types'
 import async from 'async'
 
@@ -156,17 +161,19 @@ const helpers = {
     let timeSpent = 0
     let estimation = 0
     if (!assetTypeMap.get(asset.asset_type)) {
-      assetTypeMap.set(asset.asset_type_id, {
-        id: asset.asset_type_id,
+      const assetTypeId = asset.asset_type_id || asset.entity_type_id
+      const assetType = {
+        id: assetTypeId,
         name: asset.asset_type_name
-      })
+      }
+      assetTypeMap.set(assetTypeId, assetType)
     }
     asset.production_id = production.id
     asset.project_name = production.name
     asset.production_name = production.name
 
     const taskIds = []
-    asset.tasks.forEach(task => {
+    asset.tasks?.forEach(task => {
       if (typeof task === 'string') {
         task = taskMap.get(task)
       }
@@ -238,7 +245,11 @@ const helpers = {
     result = sortAssetResult(result, sorting, taskTypeMap, taskMap)
     cache.result = result
 
-    const displayedAssets = result.slice(0, PAGE_SIZE)
+    const limit =
+      state.displayedAssets.length > PAGE_SIZE
+        ? state.displayedAssets.length
+        : PAGE_SIZE
+    const displayedAssets = result.slice(0, limit)
     const maxX = displayedAssets.length
     const maxY = state.nbValidationColumns
 
@@ -247,13 +258,24 @@ const helpers = {
     helpers.setListStats(state, result)
     state.assetSearchText = query
     state.assetSelectionGrid = buildSelectionGrid(maxX, maxY)
+  },
+
+  buildResultForSharedAssets(state, { assetSearch }) {
+    const query = assetSearch
+    const keywords = getKeyWords(query) || []
+    const result =
+      indexSearch(cache.sharedAssetIndex, keywords) || state.sharedAssets
+    state.sharedAssetSearchText = query
+    state.displayedSharedAssets = result
   }
 }
 
 const cache = {
+  assets: [],
   assetIndex: {},
   assetTypeIndex: {},
-  assets: []
+  result: [],
+  sharedAssetIndex: {}
 }
 
 const initialState = {
@@ -271,6 +293,7 @@ const initialState = {
   assetSearchText: '',
   assetSelectionGrid: {},
   assetSearchQueries: [],
+  assetSearchFilterGroups: [],
   assetSorting: [],
 
   displayedAssetTypes: [],
@@ -283,6 +306,7 @@ const initialState = {
   isAssetsLoadingError: false,
   isAssetDescription: false,
   isAssetEstimation: false,
+  isAssetResolution: false,
   isAssetTime: false,
   assetsCsvFormData: null,
 
@@ -290,7 +314,12 @@ const initialState = {
   personTasks: [],
   assetListScrollPosition: 0,
 
-  selectedAssets: new Map()
+  selectedAssets: new Map(),
+
+  displayedSharedAssets: [],
+  sharedAssets: [],
+  sharedAssetSearchText: '',
+  unsharedAssets: []
 }
 
 const state = {
@@ -302,6 +331,7 @@ const getters = {
   assetMap: state => state.assetMap,
   assetSearchText: state => state.assetSearchText,
   assetSearchQueries: state => state.assetSearchQueries,
+  assetSearchFilterGroups: state => state.assetSearchFilterGroups,
   assetSelectionGrid: state => state.assetSelectionGrid,
   assetValidationColumns: state => state.assetValidationColumns,
 
@@ -338,18 +368,39 @@ const getters = {
   isAssetEstimation: state => state.isAssetEstimation,
   isAssetTime: state => state.isAssetTime,
   isAssetDescription: state => state.isAssetDescription,
+  isAssetResolution: state => state.isAssetResolution,
 
   assetsCsvFormData: state => state.assetsCsvFormData,
 
-  selectedAssets: state => state.selectedAssets
+  selectedAssets: state => state.selectedAssets,
+
+  sharedAssets: state => state.sharedAssets,
+  unsharedAssets: state => state.unsharedAssets,
+
+  displayedSharedAssets: state => state.displayedSharedAssets,
+  displayedSharedAssetsByType: state => {
+    return groupEntitiesByParents(
+      state.displayedSharedAssets,
+      'asset_type_name'
+    )
+  },
+
+  sharedAssetsByType: state => {
+    return groupEntitiesByParents(state.sharedAssets, 'asset_type_name')
+  }
 }
 
 const actions = {
-  loadAssets({ commit, state, rootGetters }, all = false) {
+  loadAssets(
+    { commit, state, rootGetters },
+    { all = false, withTasks = true } = {}
+  ) {
+    const assetTypeMap = rootGetters.assetTypeMap
     const production = rootGetters.currentProduction
     let episode = rootGetters.currentEpisode
     const isTVShow = rootGetters.isTVShow
     const userFilters = rootGetters.userFilters
+    const userFilterGroups = rootGetters.userFilterGroups
     const personMap = rootGetters.personMap
     const taskTypeMap = rootGetters.taskTypeMap
     const taskMap = rootGetters.taskMap
@@ -358,16 +409,18 @@ const actions = {
       // If it's tv show and if we don't have any episode set,
       // we use the first one.
       episode = rootGetters.episodes.length > 0 ? rootGetters.episodes[0] : null
-      if (!episode) return Promise.resolve([])
+      if (!episode) {
+        return []
+      }
       commit(SET_CURRENT_EPISODE, episode.id)
     }
 
     if (isTVShow && !episode && !all) {
-      return Promise.resolve([])
+      return []
     }
 
     if (state.isAssetsLoading) {
-      return Promise.resolve([])
+      return []
     }
 
     if (all) {
@@ -376,22 +429,42 @@ const actions = {
 
     commit(LOAD_ASSETS_START)
     return assetsApi
-      .getAssets(production, episode)
+      .getAssets(production, episode, withTasks)
+      .then(async assets => {
+        let sharedAssets = all
+          ? await assetsApi.getSharedAssets()
+          : await assetsApi.getUsedSharedAssets(production, episode)
+        sharedAssets = sharedAssets
+          .filter(asset => asset.project_id !== production.id)
+          .map(asset => ({
+            ...asset,
+            shared: true
+          }))
+        return [...assets, ...sharedAssets]
+      })
       .then(assets => {
+        assets.forEach(asset => {
+          if (!asset.asset_type_id) {
+            asset.asset_type_id = asset.entity_type_id
+            const assetType = assetTypeMap.get(asset.asset_type_id)
+            asset.asset_type_name = assetType?.name || ''
+          }
+        })
         commit(LOAD_ASSETS_END, {
           production,
           assets,
           userFilters,
+          userFilterGroups,
           personMap,
           taskMap,
           taskTypeMap
         })
-        return Promise.resolve(assets)
+        return assets
       })
       .catch(err => {
         console.error('an error occurred while loading assets', err)
         commit(LOAD_ASSETS_ERROR)
-        return Promise.resolve([])
+        return []
       })
   },
 
@@ -460,7 +533,7 @@ const actions = {
         dispatch('createTask', {
           entityId: asset.id,
           projectId: asset.project_id,
-          taskTypeId: taskTypeId,
+          taskTypeId,
           type: 'assets'
         })
       })
@@ -513,6 +586,14 @@ const actions = {
     })
   },
 
+  shareAssets({}, { production, assetType, assetIds }) {
+    return assetsApi.shareAssets(production, assetType, assetIds)
+  },
+
+  unshareAssets({}, { assetIds }) {
+    return assetsApi.shareAssets(null, null, assetIds, false)
+  },
+
   uploadAssetFile({ commit, state }, toUpdate) {
     const production = helpers.getCurrentProduction()
     commit(IMPORT_ASSETS_START)
@@ -540,29 +621,58 @@ const actions = {
     })
   },
 
-  saveAssetSearch({ commit, state, rootGetters }, searchQuery) {
-    const query = state.assetSearchQueries.find(
-      query => query.name === searchQuery
-    )
-    const production = rootGetters.currentProduction
+  setSharedAssetSearch({ commit }, assetSearch) {
+    commit(SET_SHARED_ASSET_SEARCH, { assetSearch })
+  },
 
-    if (!query) {
-      return peopleApi
-        .createFilter('asset', searchQuery, searchQuery, production.id, null)
-        .then(searchQuery => {
-          commit(SAVE_ASSET_SEARCH_END, { searchQuery, production })
-          return Promise.resolve(searchQuery)
-        })
-    } else {
-      Promise.resolve()
+  saveAssetSearch({ commit, state, rootGetters }, searchQuery) {
+    if (state.assetSearchQueries.some(query => query.name === searchQuery)) {
+      return
     }
+    const production = rootGetters.currentProduction
+    return peopleApi
+      .createFilter('asset', searchQuery, searchQuery, production.id, null)
+      .then(searchQuery => {
+        commit(SAVE_ASSET_SEARCH_END, { searchQuery, production })
+        return searchQuery
+      })
+  },
+
+  saveAssetSearchFilterGroup({ commit, state, rootGetters }, filterGroup) {
+    const groupExist = state.assetSearchFilterGroups.some(
+      query => query.name === filterGroup.name
+    )
+    if (groupExist) {
+      return
+    }
+
+    const production = rootGetters.currentProduction
+    return peopleApi
+      .createFilterGroup(
+        'asset',
+        filterGroup.name,
+        filterGroup.color,
+        production.id,
+        filterGroup.is_shared,
+        filterGroup.department_id
+      )
+      .then(filterGroup => {
+        commit(SAVE_ASSET_SEARCH_FILTER_GROUP_END, { filterGroup, production })
+        return filterGroup
+      })
   },
 
   removeAssetSearch({ commit, rootGetters }, searchQuery) {
     const production = rootGetters.currentProduction
     return peopleApi.removeFilter(searchQuery).then(() => {
       commit(REMOVE_ASSET_SEARCH_END, { searchQuery, production })
-      return Promise.resolve()
+    })
+  },
+
+  removeAssetSearchFilterGroup({ commit, rootGetters }, filterGroup) {
+    const production = rootGetters.currentProduction
+    return peopleApi.removeFilterGroup(filterGroup).then(() => {
+      commit(REMOVE_ASSET_SEARCH_FILTER_GROUP_END, { filterGroup, production })
     })
   },
 
@@ -711,6 +821,30 @@ const actions = {
         }
       )
     })
+  },
+
+  async loadSharedAssets({ commit, rootGetters }, { production }) {
+    try {
+      const assets = await assetsApi.getSharedAssets(production)
+      const productionMap = rootGetters.productionMap
+      const assetTypeMap = rootGetters.assetTypeMap
+      commit(LOAD_SHARED_ASSETS_END, { assets, productionMap, assetTypeMap })
+    } catch (err) {
+      console.error(err)
+      throw err
+    }
+  },
+
+  async loadUnsharedAssets({ commit, rootGetters }, { production }) {
+    try {
+      const assets = await assetsApi.getSharedAssets(production, false)
+      const productionMap = rootGetters.productionMap
+      const assetTypeMap = rootGetters.assetTypeMap
+      commit(LOAD_UNSHARED_ASSETS_END, { assets, productionMap, assetTypeMap })
+    } catch (err) {
+      console.error(err)
+      throw err
+    }
   }
 }
 
@@ -726,6 +860,7 @@ const mutations = {
     state.assetFilledColumns = {}
     helpers.setListStats(state, [])
     state.assetSearchQueries = []
+    state.assetSearchFilterGroups = []
 
     state.selectedAssets = new Map()
   },
@@ -743,6 +878,7 @@ const mutations = {
     state.assetFilledColumns = {}
     helpers.setListStats(state, [])
     state.assetSearchQueries = []
+    state.assetSearchFilterGroups = []
 
     state.selectedAssets = new Map()
   },
@@ -754,13 +890,22 @@ const mutations = {
 
   [LOAD_ASSETS_END](
     state,
-    { production, assets, userFilters, personMap, taskMap, taskTypeMap }
+    {
+      production,
+      assets,
+      userFilters,
+      userFilterGroups,
+      personMap,
+      taskMap,
+      taskTypeMap
+    }
   ) {
     const validationColumns = {}
     const assetTypeMap = new Map()
     let isTime = false
     let isEstimation = false
     let isDescription = false
+    let isResolution = false
     assets = sortAssets(assets)
     cache.assets = assets
     cache.result = assets
@@ -781,6 +926,7 @@ const mutations = {
       if (!isTime && asset.timeSpent > 0) isTime = true
       if (!isEstimation && asset.estimation > 0) isEstimation = true
       if (!isDescription && asset.description) isDescription = true
+      if (!isResolution && asset.data?.resolution) isResolution = true
     })
 
     const assetTypes = Array.from(assetTypeMap.values())
@@ -796,6 +942,7 @@ const mutations = {
     state.isAssetTime = isTime
     state.isAssetEstimation = isEstimation
     state.isAssetDescription = isDescription
+    state.isAssetResolution = isResolution
 
     state.isAssetsLoading = false
     state.isAssetsLoadingError = false
@@ -814,11 +961,36 @@ const mutations = {
     const maxY = state.nbValidationColumns
     state.assetSelectionGrid = buildSelectionGrid(maxX, maxY)
 
-    if (userFilters.asset && userFilters.asset[production.id]) {
-      state.assetSearchQueries = userFilters.asset[production.id]
-    } else {
-      state.assetSearchQueries = []
-    }
+    state.assetSearchQueries = userFilters.asset?.[production.id] || []
+
+    state.assetSearchFilterGroups =
+      userFilterGroups?.asset?.[production.id] || []
+  },
+
+  [LOAD_SHARED_ASSETS_END](state, { assets, productionMap, assetTypeMap }) {
+    assets.forEach(asset => {
+      asset.production = productionMap.get(asset.project_id)
+      asset.assetType = assetTypeMap.get(asset.entity_type_id)
+      asset.asset_type_name = asset.assetType?.name
+      asset.full_name = `${asset.asset_type_name} / ${asset.name}`
+    })
+    assets = sortAssets(assets)
+    state.sharedAssets = assets
+    cache.sharedAssetIndex = buildAssetIndex(state.sharedAssets)
+    helpers.buildResultForSharedAssets(state, {
+      assetSearch: state.sharedAssetSearchText
+    })
+  },
+
+  [LOAD_UNSHARED_ASSETS_END](state, { assets, productionMap, assetTypeMap }) {
+    assets.forEach(asset => {
+      asset.production = productionMap.get(asset.project_id)
+      asset.assetType = assetTypeMap.get(asset.entity_type_id)
+      asset.asset_type_name = asset.assetType?.name
+      asset.full_name = `${asset.asset_type_name} / ${asset.name}`
+    })
+    assets = sortAssets(assets)
+    state.unsharedAssets = assets
   },
 
   [ADD_ASSET](state, { taskTypeMap, taskMap, personMap, production, asset }) {
@@ -958,10 +1130,21 @@ const mutations = {
     helpers.buildResult(state, payload)
   },
 
+  [SET_SHARED_ASSET_SEARCH](state, { assetSearch }) {
+    helpers.buildResultForSharedAssets(state, { assetSearch })
+  },
+
   [SAVE_ASSET_SEARCH_END](state, { searchQuery }) {
     if (!state.assetSearchQueries.includes(searchQuery)) {
       state.assetSearchQueries.push(searchQuery)
       state.assetSearchQueries = sortByName(state.assetSearchQueries)
+    }
+  },
+
+  [SAVE_ASSET_SEARCH_FILTER_GROUP_END](state, { filterGroup }) {
+    if (!state.assetSearchFilterGroups.includes(filterGroup)) {
+      state.assetSearchFilterGroups.push(filterGroup)
+      state.assetSearchFilterGroups = sortByName(state.assetSearchFilterGroups)
     }
   },
 
@@ -974,10 +1157,16 @@ const mutations = {
     }
   },
 
-  [DISPLAY_MORE_ASSETS](
-    state,
-    { taskTypeMap, taskStatusMap, taskMap, production }
-  ) {
+  [REMOVE_ASSET_SEARCH_FILTER_GROUP_END](state, { filterGroup }) {
+    const groupIndex = state.assetSearchFilterGroups.findIndex(
+      query => query.name === filterGroup.name
+    )
+    if (groupIndex >= 0) {
+      state.assetSearchFilterGroups.splice(groupIndex, 1)
+    }
+  },
+
+  [DISPLAY_MORE_ASSETS](state) {
     const assets = cache.result
     const newLength = state.displayedAssets.length + PAGE_SIZE
     if (newLength < assets.length + PAGE_SIZE) {
@@ -1000,11 +1189,11 @@ const mutations = {
     }
   },
 
-  [SET_CURRENT_PRODUCTION](state, production) {
+  [SET_CURRENT_PRODUCTION](state) {
     state.assetSearchText = ''
   },
 
-  [SET_PREVIEW](state, { entityId, taskId, previewId, taskMap }) {
+  [SET_PREVIEW](state, { entityId, previewId, taskMap }) {
     const asset = state.assetMap.get(entityId)
     if (asset) {
       asset.preview_file_id = previewId
@@ -1024,6 +1213,17 @@ const mutations = {
   },
 
   [REMOVE_SELECTED_TASK](state, validationInfo) {
+    if (
+      !validationInfo.x &&
+      validationInfo.task?.column &&
+      state.assetMap.get(validationInfo.task.entity.id)
+    ) {
+      const entity = validationInfo.task.entity
+      const taskType = validationInfo.task.column
+      const list = state.displayedAssets.flat()
+      validationInfo.x = list.findIndex(e => e.id === entity.id)
+      validationInfo.y = state.assetValidationColumns.indexOf(taskType.id)
+    }
     if (
       state.assetSelectionGrid[0] &&
       state.assetSelectionGrid[validationInfo.x]

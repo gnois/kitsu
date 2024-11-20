@@ -27,6 +27,10 @@
             >
               {{ $t('tasks.fields.entity') }}
             </th>
+            <th scope="col" class="episode" v-if="isEpisodeVisible">
+              {{ $t('assets.fields.episode') }}
+            </th>
+
             <th class="assignees" ref="th-assignees" v-if="isToCheck">
               {{ $t('tasks.fields.assignees') }}
             </th>
@@ -114,20 +118,26 @@
                 </router-link>
               </div>
             </td>
+
+            <td class="episode" v-if="isEpisodeVisible">
+              <div class="flexrow" :title="assetEpisodes(entry, true)">
+                {{ assetEpisodes(entry, false) }}
+              </div>
+            </td>
+
             <description-cell
               class="description"
               :entry="{ description: entry.entity_description }"
               v-if="isDescriptionPresent && !isToCheck"
             />
             <td class="assignees" v-if="isToCheck">
-              <div class="flexrow">
+              <div class="avatars">
                 <people-avatar
-                  class="flexrow-item"
-                  :key="entry.id + '-' + personId"
-                  :person="personMap.get(personId)"
+                  :key="`${entry.id}-${person.id}`"
+                  :person="person"
                   :size="30"
                   :font-size="16"
-                  v-for="personId in entry.assignees"
+                  v-for="person in getSortedPeople(entry.assignees)"
                 />
               </div>
             </td>
@@ -211,8 +221,8 @@
               :selected="
                 selectionGrid && selectionGrid[i] ? selectionGrid[i][0] : false
               "
-              :rowX="i"
-              :columnY="0"
+              :row-x="i"
+              :column-y="0"
               :column="entry.taskStatus"
               @select="onTaskSelected"
               @unselect="onTaskUnselected"
@@ -259,26 +269,29 @@
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
+import { mapGetters } from 'vuex'
 
 import { selectionListMixin } from '@/components/mixins/selection'
 import { formatListMixin } from '@/components/mixins/format'
 import { descriptorMixin } from '@/components/mixins/descriptors'
+
 import { PAGE_SIZE } from '@/lib/pagination'
+import { sortPeople } from '@/lib/sorting'
 import { formatSimpleDate } from '@/lib/time'
 
-import EntityThumbnail from '@/components/widgets/EntityThumbnail'
-import DescriptionCell from '@/components/cells/DescriptionCell'
-import LastCommentCell from '@/components/cells/LastCommentCell'
-import ProductionNameCell from '@/components/cells/ProductionNameCell'
-import PeopleAvatar from '@/components/widgets/PeopleAvatar'
-import TaskTypeCell from '@/components/cells/TaskTypeName'
-import TableInfo from '@/components/widgets/TableInfo'
-import ValidationCell from '@/components/cells/ValidationCell'
-import MetadataHeader from '@/components/cells/MetadataHeader'
+import EntityThumbnail from '@/components/widgets/EntityThumbnail.vue'
+import DescriptionCell from '@/components/cells/DescriptionCell.vue'
+import LastCommentCell from '@/components/cells/LastCommentCell.vue'
+import ProductionNameCell from '@/components/cells/ProductionNameCell.vue'
+import PeopleAvatar from '@/components/widgets/PeopleAvatar.vue'
+import TaskTypeCell from '@/components/cells/TaskTypeCell.vue'
+import TableInfo from '@/components/widgets/TableInfo.vue'
+import ValidationCell from '@/components/cells/ValidationCell.vue'
+import MetadataHeader from '@/components/cells/MetadataHeader.vue'
 
 export default {
   name: 'todos-list',
+
   mixins: [formatListMixin, selectionListMixin, descriptorMixin],
 
   components: {
@@ -411,11 +424,44 @@ export default {
       return (
         Math.floor((this.timeEstimated ? this.timeEstimated : 0) / 60 / 8) <= 1
       )
+    },
+
+    isEpisodeVisible() {
+      return this.displayedTasks.some(
+        task => task.source_id || task.episode_names?.length > 0
+      )
     }
   },
 
   methods: {
-    ...mapActions([]),
+    assetEpisodes(entry, full) {
+      if (
+        ['Episode', 'Sequence', 'Shot', 'Edit'].includes(entry.entity_type_name)
+      )
+        return ''
+      const mainEpisodeName = entry.episode_name || 'MP'
+      const episodeNames = (entry.episode_names || []).filter(
+        name => name !== mainEpisodeName
+      )
+      let episodeNameString = ''
+      if (episodeNames.length > 2) {
+        if (full) {
+          episodeNameString = episodeNames.join(', ')
+        } else {
+          episodeNameString = episodeNames.slice(0, 2).join(', ') + ', ...'
+        }
+      } else if (episodeNames.length > 0) {
+        episodeNameString = episodeNames.join(', ')
+      }
+      return episodeNames.length > 0
+        ? mainEpisodeName + ', ' + episodeNameString
+        : mainEpisodeName
+    },
+
+    getSortedPeople(personIds) {
+      const people = personIds.map(id => this.personMap.get(id))
+      return sortPeople(people)
+    },
 
     setScrollPosition(scrollPosition) {
       if (this.$refs.body) {
@@ -702,8 +748,14 @@ export default {
 }
 
 .assignees {
-  width: 130px;
-  max-width: 130px;
+  width: 140px;
+  max-width: 140px;
+
+  .avatars {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
 }
 
 .status {
@@ -755,10 +807,16 @@ td.end-date {
 
 .empty-list img {
   max-width: 80vh;
+  -webkit-filter: brightness(103%);
 }
 
 .entity-name {
   color: var(--text);
   font-weight: bold;
+}
+
+.episode {
+  min-width: 130px;
+  width: 130px;
 }
 </style>

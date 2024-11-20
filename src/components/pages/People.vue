@@ -7,14 +7,14 @@
         class="flexrow-item"
         :title="$t('main.csv.import_file')"
         :is-responsive="true"
-        icon="upload"
+        icon="import"
         @click="showImportModal"
         v-if="isCurrentUserAdmin"
       />
       <button-href-link
         class="flexrow-item"
         :title="$t('main.csv.export_file')"
-        icon="download"
+        icon="export"
         path="/api/export/csv/persons.csv"
       />
       <button-simple
@@ -37,16 +37,20 @@
         placeholder="ex: John Doe"
       />
       <combobox-department
-        class="combobox-department flexrow-item"
+        class="flexrow-item"
         :label="$t('main.department')"
         v-model="selectedDepartment"
+      />
+      <combobox-studio
+        class="flexrow-item"
+        :label="$t('main.studio')"
+        v-model="selectedStudio"
       />
       <combobox-styled
         class="flexrow-item"
         :label="$t('people.fields.role')"
-        :options="roleOptions"
         locale-key-prefix="people.role."
-        no-margin
+        :options="roleOptions"
         v-model="role"
       />
     </div>
@@ -54,6 +58,7 @@
     <div class="query-list">
       <search-query-list
         :queries="peopleSearchQueries"
+        type="people"
         @change-search="changeSearch"
         @remove-search="removeSearchQuery"
         v-if="!isPeopleLoading"
@@ -64,8 +69,9 @@
       :entries="currentPeople"
       :is-loading="isPeopleLoading"
       :is-error="isPeopleLoadingError"
-      @edit-clicked="onEditClicked"
+      @avatar-clicked="onAvatarClicked"
       @delete-clicked="onDeleteClicked"
+      @edit-clicked="onEditClicked"
       @change-password-clicked="onChangePasswordClicked"
     />
 
@@ -76,7 +82,7 @@
       :parsed-csv="parsedCSV"
       :form-data="personCsvFormData"
       :columns="[...dataMatchers, ...csvColumns, ...optionalCsvColumns]"
-      :dataMatchers="dataMatchers"
+      :data-matchers="dataMatchers"
       :database="filteredPeople"
       @reupload="resetImport"
       @cancel="hideImportRenderModal"
@@ -93,6 +99,18 @@
       :optional-columns="optionalCsvColumns"
       @cancel="hideImportModal"
       @confirm="renderImport"
+    />
+
+    <edit-avatar-modal
+      :active="modals.avatar"
+      :error-text="$t('people.edit_avatar_error')"
+      :is-deleting="loading.deletingAvatar"
+      :is-error="errors.avatar"
+      :is-updating="loading.updatingAvatar"
+      :person="personToEdit"
+      @close="modals.avatar = false"
+      @delete="deleteAvatar"
+      @update="updateAvatar"
     />
 
     <edit-person-modal
@@ -128,13 +146,6 @@
       @cancel="modals.del = false"
       @confirm="confirmDeletePeople"
     />
-
-    <build-people-filter-modal
-      ref="build-filter-modal"
-      :active="modals.isBuildFilterDisplayed"
-      @cancel="modals.isBuildFilterDisplayed = false"
-      @confirm="confirmBuildFilter"
-    />
   </div>
 </template>
 
@@ -142,38 +153,44 @@
 import { mapGetters, mapActions } from 'vuex'
 
 import csv from '@/lib/csv'
-import ButtonHrefLink from '@/components/widgets/ButtonHrefLink'
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import BuildPeopleFilterModal from '@/components/modals/BuildPeopleFilterModal'
-import ChangePasswordModal from '@/components/modals/ChangePasswordModal'
-import ComboboxDepartment from '@/components/widgets/ComboboxDepartment'
-import ComboboxStyled from '@/components/widgets/ComboboxStyled'
-import EditPersonModal from '@/components/modals/EditPersonModal'
-import HardDeleteModal from '@/components/modals/HardDeleteModal'
-import ImportModal from '@/components/modals/ImportModal'
-import ImportRenderModal from '@/components/modals/ImportRenderModal'
-import PeopleList from '@/components/lists/PeopleList'
-import PageTitle from '@/components/widgets/PageTitle'
-import SearchField from '@/components/widgets/SearchField'
-import SearchQueryList from '@/components/widgets/SearchQueryList'
+
 import { searchMixin } from '@/components/mixins/search'
+
+import ButtonHrefLink from '@/components/widgets/ButtonHrefLink.vue'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import ChangePasswordModal from '@/components/modals/ChangePasswordModal.vue'
+import ComboboxDepartment from '@/components/widgets/ComboboxDepartment.vue'
+import ComboboxStudio from '@/components/widgets/ComboboxStudio.vue'
+import ComboboxStyled from '@/components/widgets/ComboboxStyled.vue'
+import EditAvatarModal from '@/components/modals/EditAvatarModal.vue'
+import EditPersonModal from '@/components/modals/EditPersonModal.vue'
+import HardDeleteModal from '@/components/modals/HardDeleteModal.vue'
+import ImportModal from '@/components/modals/ImportModal.vue'
+import ImportRenderModal from '@/components/modals/ImportRenderModal.vue'
+import PeopleList from '@/components/lists/PeopleList.vue'
+import PageTitle from '@/components/widgets/PageTitle.vue'
+import SearchField from '@/components/widgets/SearchField.vue'
+import SearchQueryList from '@/components/widgets/SearchQueryList.vue'
 
 export default {
   name: 'people',
+
   mixins: [searchMixin],
+
   components: {
-    BuildPeopleFilterModal,
     ButtonHrefLink,
     ButtonSimple,
     ChangePasswordModal,
-    ComboboxStyled,
     ComboboxDepartment,
+    ComboboxStudio,
+    ComboboxStyled,
+    EditAvatarModal,
     EditPersonModal,
     HardDeleteModal,
     ImportModal,
+    ImportRenderModal,
     PageTitle,
     PeopleList,
-    ImportRenderModal,
     SearchField,
     SearchQueryList
   },
@@ -181,7 +198,13 @@ export default {
   data() {
     return {
       csvColumns: ['First Name', 'Last Name'],
-      optionalCsvColumns: ['Phone', 'Role'],
+      optionalCsvColumns: [
+        'Phone',
+        'Role',
+        'Contract Type',
+        'Studio',
+        'Active'
+      ],
       dataMatchers: ['Email'],
       role: 'all',
       roleOptions: [
@@ -194,29 +217,35 @@ export default {
         { label: 'vendor', value: 'vendor' }
       ],
       errors: {
+        avatar: false,
         del: false,
         edit: false,
-        invite: false
+        invite: false,
+        userLimit: false
       },
       loading: {
         createAndInvite: false,
-        edit: false,
         del: false,
-        invite: false
+        deletingAvatar: false,
+        edit: false,
+        invite: false,
+        savingSearch: false,
+        updatingAvatar: false
       },
       modals: {
-        edit: false,
-        del: false,
+        avatar: false,
         changePassword: false,
+        del: false,
+        edit: false,
         importModal: false,
-        isImportRenderDisplayed: false,
-        isBuildFilterDisplayed: false
+        isImportRenderDisplayed: false
       },
       parsedCSV: [],
       personToDelete: {},
       personToEdit: { role: 'user' },
       personToChangePassword: {},
       selectedDepartment: '',
+      selectedStudio: '',
       success: {
         invite: false
       }
@@ -226,10 +255,11 @@ export default {
   mounted() {
     this.role = this.$route.query.role || 'all'
     this.selectedDepartment = this.$route.query.department || ''
+    this.selectedStudio = this.$route.query.studio || ''
+    this.setSearchFromUrl()
     this.loadPeople(() => {
-      this.setSearchFromUrl()
       this.onSearchChange()
-    }) // Needed to show department informations
+    })
   },
 
   watch: {
@@ -249,6 +279,10 @@ export default {
       this.updateRoute()
     },
 
+    selectedStudio() {
+      this.updateRoute()
+    },
+
     role() {
       this.updateRoute()
     }
@@ -258,39 +292,39 @@ export default {
     ...mapGetters([
       'displayedPeople',
       'isCurrentUserAdmin',
-
       'isPeopleLoading',
       'isPeopleLoadingError',
-
-      'isImportPeopleModalShown',
       'isImportPeopleLoading',
       'isImportPeopleLoadingError',
-
       'peopleSearchQueries',
-      'personCsvFormData'
+      'personCsvFormData',
+      'studioMap'
     ]),
 
     currentPeople() {
-      let people =
-        this.role === 'all'
-          ? this.displayedPeople
-          : this.displayedPeople.filter(p => p.role === this.role)
+      let people = this.displayedPeople.filter(person => !person.is_bot)
+      if (this.role !== 'all') {
+        people = people.filter(person => person.role === this.role)
+      }
       if (this.selectedDepartment) {
-        people = people.filter(p =>
-          p.departments.includes(this.selectedDepartment)
+        people = people.filter(person =>
+          person.departments.includes(this.selectedDepartment)
         )
       }
-      return people
+      if (this.selectedStudio) {
+        people = people.filter(
+          person => person.studio_id === this.selectedStudio
+        )
+      }
+      return people.map(person => ({
+        ...person,
+        studio: this.studioMap.get(person.studio_id)
+      }))
     },
 
     deleteText() {
-      const person = this.personToDelete
-      if (person !== undefined) {
-        const personName = `${person.first_name} ${person.last_name}`
-        return this.$t('people.delete_text', { personName })
-      } else {
-        return ''
-      }
+      const personName = this.personToDelete?.full_name
+      return personName ? this.$t('people.delete_text', { personName }) : ''
     },
 
     filteredPeople() {
@@ -309,16 +343,17 @@ export default {
 
   methods: {
     ...mapActions([
-      'editPerson',
+      'clearPersonAvatar',
       'deletePeople',
+      'editPerson',
       'invitePerson',
       'loadPeople',
-      'loadDepartments',
       'newPerson',
       'newPersonAndInvite',
       'removePeopleSearch',
       'savePeopleSearch',
       'setPeopleSearch',
+      'uploadPersonAvatar',
       'uploadPersonFile'
     ]),
 
@@ -340,7 +375,8 @@ export default {
     uploadImportFile(data, toUpdate) {
       const formData = new FormData()
       const filename = 'import.csv'
-      const file = new File([data.join('\n')], filename, { type: 'text/csv' })
+      const csvContent = csv.turnEntriesToCsvString(data)
+      const file = new File([csvContent], filename, { type: 'text/csv' })
 
       formData.append('file', file)
       this.loading.importing = true
@@ -367,6 +403,28 @@ export default {
       this.showImportModal()
     },
 
+    async deleteAvatar() {
+      this.loading.deletingAvatar = true
+      try {
+        await this.clearPersonAvatar(this.personToEdit)
+        this.modals.avatar = false
+      } catch (err) {
+        this.errors.avatar = true
+      }
+      this.loading.deletingAvatar = false
+    },
+
+    async updateAvatar(formData) {
+      this.loading.updatingAvatar = true
+      try {
+        await this.uploadPersonAvatar({ person: this.personToEdit, formData })
+        this.modals.avatar = false
+      } catch (err) {
+        this.errors.avatar = true
+      }
+      this.loading.updatingAvatar = false
+    },
+
     confirmEditPeople(form) {
       let action = 'editPerson'
       if (this.personToEdit.id === undefined) action = 'newPerson'
@@ -380,10 +438,9 @@ export default {
           this.modals.edit = false
         })
         .catch(err => {
+          const message = err.body?.message
           const isUserLimitReached =
-            err.body &&
-            err.body.message &&
-            err.body.message.indexOf('limit') > 0
+            typeof message === 'string' && message.includes('limit')
           if (isUserLimitReached) {
             this.errors.userLimit = true
           } else {
@@ -404,9 +461,7 @@ export default {
         })
         .catch(err => {
           const isUserLimitReached =
-            err.body &&
-            err.body.message &&
-            err.body.message.indexOf('limit') > 0
+            err.body?.message?.includes('limit') ?? false
           if (isUserLimitReached) {
             this.errors.userLimit = true
           } else {
@@ -460,6 +515,12 @@ export default {
       }
     },
 
+    onAvatarClicked(person) {
+      this.personToEdit = person
+      this.errors.avatar = false
+      this.modals.avatar = true
+    },
+
     onDeleteClicked(person) {
       this.personToDelete = person
       this.modals.del = true
@@ -501,24 +562,27 @@ export default {
     },
 
     saveSearchQuery(searchQuery) {
-      this.savePeopleSearch(searchQuery).catch(console.error)
+      if (this.loading.savingSearch) {
+        return
+      }
+      this.loading.savingSearch = true
+      this.savePeopleSearch(searchQuery)
+        .catch(console.error)
+        .finally(() => {
+          this.loading.savingSearch = false
+        })
     },
 
     removeSearchQuery(searchQuery) {
       this.removePeopleSearch(searchQuery).catch(console.error)
     },
 
-    confirmBuildFilter(query) {
-      this.modals.isBuildFilterDisplayed = false
-      this.searchField.setValue(query)
-      this.onSearchChange()
-    },
-
     updateRoute() {
       const search = this.searchField.getValue()
       const department = this.selectedDepartment
+      const studio = this.selectedStudio
       const role = this.role
-      this.$router.push({ query: { search, department, role } })
+      this.$router.push({ query: { search, department, studio, role } })
     }
   },
 

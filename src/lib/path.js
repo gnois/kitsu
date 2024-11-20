@@ -43,7 +43,35 @@ export const getTaskEntityPath = (task, episodeId) => {
     }
     route.params[`${route.name}_id`] = entityId
 
-    if (episodeId) {
+    if (episodeId && route.name !== 'episode') {
+      route.name = `episode-${route.name}`
+      route.params.episode_id = episodeId
+    }
+    return route
+  } else {
+    return {
+      name: 'open-productions'
+    }
+  }
+}
+
+export const getTaskEntitiesPath = (task, episodeId) => {
+  if (task) {
+    let type = task.entity_type_name
+    if (!['Shot', 'Sequence', 'Episode', 'Edit'].includes(type)) {
+      type = 'Asset'
+    }
+    const route = {
+      name: type.toLowerCase() + 's',
+      params: {
+        production_id: task.project_id
+      },
+      query: {
+        search: '',
+        task_id: task.id
+      }
+    }
+    if (episodeId && !['episode', 'episodes'].includes(route.name)) {
       route.name = `episode-${route.name}`
       route.params.episode_id = episodeId
     }
@@ -71,7 +99,13 @@ export const getEntitiesPath = (productionId, type, episodeId) => {
   return route
 }
 
-export const getEntityPath = (entityId, productionId, section, episodeId) => {
+export const getEntityPath = (
+  entityId,
+  productionId,
+  section,
+  episodeId,
+  query
+) => {
   const route = {
     name: section,
     params: {
@@ -88,6 +122,10 @@ export const getEntityPath = (entityId, productionId, section, episodeId) => {
     route.params[`${section}_id`] = entityId
   }
 
+  if (query) {
+    route.query = query
+  }
+
   return route
 }
 
@@ -102,12 +140,22 @@ const getProductionRoute = (name, productionId) => {
 
 export const getProductionPath = (
   production,
-  section = 'assets',
+  section = production.homepage || 'assets',
   episodeId
 ) => {
   if (section === 'assetTypes') section = 'production-asset-types'
   if (section === 'newsFeed') section = 'news-feed'
   let route = getProductionRoute(section, production.id)
+
+  if (production.production_type === 'shots' && route.name === 'assets') {
+    route.name = 'shots'
+  } else if (
+    production.production_type === 'assets' &&
+    ['shots', 'sequences'].includes(route.name)
+  ) {
+    route.name = 'assets'
+  }
+
   if (
     production.production_type === 'tvshow' &&
     ![
@@ -117,13 +165,18 @@ export const getProductionPath = (
       'quota',
       'team',
       'episodes',
-      'episode-stats'
+      'episode-stats',
+      'concepts'
     ].includes(section)
   ) {
     route = episodifyRoute(route, episodeId || 'all')
   }
 
-  if (['assets', 'shots', 'edits', 'breakdown'].includes(section)) {
+  if (
+    ['assets', 'shots', 'edits', 'sequences', 'episodes', 'breakdown'].includes(
+      section
+    )
+  ) {
     route.query = { search: '' }
   }
 
@@ -177,6 +230,7 @@ export const getPersonPath = personId => {
     }
   }
 }
+
 export const getPersonTabPath = (personId, tab) => {
   return {
     name: 'person-tab',
@@ -185,6 +239,14 @@ export const getPersonTabPath = (personId, tab) => {
       tab
     }
   }
+}
+
+export const getDownloadAttachmentPath = attachment => {
+  return `/api/data/attachment-files/${attachment.id}/file/${attachment.name}`
+}
+
+export const getAttachmentThumbnailPath = attachment => {
+  return `/api/pictures/thumbnails/attachment-files/${attachment.id}.png`
 }
 
 export const pluralizeEntityType = (type = '') => {

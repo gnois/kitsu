@@ -32,6 +32,7 @@
             active: mode === 'publish'
           }"
           @click="mode = 'publish'"
+          v-if="!isConcept"
         >
           {{ $t('tasks.publish_revision') }}
         </span>
@@ -41,16 +42,16 @@
         :members="atOptions"
         name-key="full_name"
         :limit="2"
-        @input="onTextChanged"
+        @input="onAtTextChanged"
         v-if="mode === 'status' || showCommentArea"
       >
-        <template slot="item" slot-scope="team">
-          <template v-if="team.item.isTime"> ⏱️ frame </template>
-          <template v-else-if="team.item.isDepartment">
+        <template #item="{ item }">
+          <template v-if="item.isTime"> ⏱️ frame </template>
+          <template v-else-if="item.isDepartment">
             <span
               class="mr05"
               :style="{
-                background: team.item.color,
+                background: item.color,
                 width: '10px',
                 height: '10px',
                 'border-radius': '50%'
@@ -58,20 +59,20 @@
             >
               &nbsp;
             </span>
-            {{ team.item.full_name }}
+            {{ item.full_name }}
           </template>
           <template v-else>
             <div class="flexrow">
               <people-avatar
                 class="flexrow-item"
-                :person="team.item"
+                :person="item"
                 :size="20"
                 :font-size="11"
-                :no-cache="true"
+                :is-lazy="false"
                 :is-link="false"
               />
               <span class="flexrow-item">
-                {{ team.item.full_name }}
+                {{ item.full_name }}
               </span>
             </div>
           </template>
@@ -79,17 +80,18 @@
         <textarea-autosize
           ref="comment-textarea"
           class="textarea flexrow-item"
-          :placeholder="$t('comments.add_comment')"
           :disabled="isLoading"
           :min-height="50"
           :max-height="300"
+          :placeholder="$t('comments.add_comment')"
           @keyup.enter.ctrl.native="
             runAddComment(
               text,
               attachments,
               checklist,
               task_status_id,
-              nextRevision
+              nextRevision,
+              link
             )
           "
           @keyup.enter.meta.native="
@@ -98,17 +100,40 @@
               attachments,
               checklist,
               task_status_id,
-              nextRevision
+              nextRevision,
+              link
             )
           "
           v-model="text"
           v-focus
         />
       </at-ta>
+      <div
+        class="flexrow link-field"
+        v-if="mode === 'publish' && showLinkField"
+      >
+        <label class="flexrow-item has-text-right" for="input-link">
+          {{ $t('main.link') }}
+        </label>
+        <input
+          id="input-link"
+          ref="input-link"
+          class="input flexrow-item filler preview-link"
+          placeholder="https://..."
+          type="url"
+          v-model.trim="link"
+        />
+        <span
+          class="flexrow-item column preview-delete-link"
+          @click.prevent="toggleLinkField(true)"
+        >
+          x
+        </span>
+      </div>
       <div class="post-area">
         <checklist
           :checklist="checklist"
-          :frame="frame"
+          :frame="frame + 1"
           :revision="revision"
           :is-movie-preview="isMovie"
           @add-item="onAddChecklistItem"
@@ -218,12 +243,23 @@
             @click="showCommentArea = !showCommentArea"
             v-if="mode === 'publish'"
           />
+          <button-simple
+            :class="{
+              'flexrow-item': true,
+              active: showLinkField
+            }"
+            icon="link"
+            :title="$t('comments.add_link')"
+            @click="toggleLinkField"
+            v-if="mode === 'publish'"
+          />
           <div class="filler"></div>
           <combobox-status
             class="flexrow-item status-selector"
             :narrow="true"
             :color-only="true"
             :task-status-list="taskStatus"
+            :production-id="task.project_id"
             v-model="task_status_id"
           />
           <button-simple
@@ -246,7 +282,8 @@
                 attachments,
                 checklist,
                 task_status_id,
-                nextRevision
+                nextRevision,
+                link
               )
             "
           />
@@ -261,8 +298,8 @@
       </div>
     </div>
 
-    <add-comment-image-modal
-      ref="add-comment-image-modal"
+    <add-attachment-modal
+      ref="add-attachment-modal"
       :active="modals.addCommentAttachment"
       :is-loading="loading.addCommentAttachment"
       :is-error="errors.addCommentAttachment"
@@ -287,6 +324,7 @@
           checklist,
           task_status_id,
           nextRevision,
+          link,
           true
         )
       "
@@ -295,19 +333,20 @@
 </template>
 
 <script>
-import { mapGetters } from 'vuex'
-import { remove } from '@/lib/models'
-import strings from '@/lib/string'
-import colors from '@/lib/colors'
-import { replaceTimeWithTimecode } from '@/lib/render'
-
 import AtTa from 'vue-at/dist/vue-at-textarea'
-import AddCommentImageModal from '@/components/modals/AddCommentImageModal'
-import ConfirmModal from '@/components/modals/ConfirmModal'
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import ComboboxStatus from '@/components/widgets/ComboboxStatus'
-import Checklist from '@/components/widgets/Checklist'
-import PeopleAvatar from '@/components/widgets/PeopleAvatar'
+import { mapGetters } from 'vuex'
+
+import drafts from '@/lib/drafts'
+import { remove } from '@/lib/models'
+import { replaceTimeWithTimecode } from '@/lib/render'
+import strings from '@/lib/string'
+
+import AddAttachmentModal from '@/components/modals/AddAttachmentModal.vue'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import Checklist from '@/components/widgets/Checklist.vue'
+import ComboboxStatus from '@/components/widgets/ComboboxStatus.vue'
+import ConfirmModal from '@/components/modals/ConfirmModal.vue'
+import PeopleAvatar from '@/components/widgets/PeopleAvatar.vue'
 
 const REVISION_NUMBER_REGEX = /v(\d+)/gi
 
@@ -316,10 +355,10 @@ export default {
 
   components: {
     AtTa,
-    AddCommentImageModal,
+    AddAttachmentModal,
     ButtonSimple,
-    ConfirmModal,
     Checklist,
+    ConfirmModal,
     ComboboxStatus,
     PeopleAvatar
   },
@@ -330,8 +369,10 @@ export default {
       attachments: [],
       checklist: [],
       isDragging: false,
+      link: null,
       mode: 'status',
       showCommentArea: false,
+      showLinkField: false,
       nextRevision: undefined,
       text: '',
       task_status_id: null,
@@ -349,9 +390,9 @@ export default {
   },
 
   props: {
-    addComment: {
-      type: Function,
-      default: null
+    frame: {
+      type: Number,
+      default: 0
     },
     isError: {
       type: Boolean,
@@ -369,10 +410,6 @@ export default {
       type: Boolean,
       default: null
     },
-    light: {
-      type: Boolean,
-      default: false
-    },
     task: {
       type: Object,
       default: () => {}
@@ -380,10 +417,6 @@ export default {
     taskStatus: {
       type: Array,
       default: () => []
-    },
-    user: {
-      type: Object,
-      default: () => {}
     },
     team: {
       type: Array,
@@ -408,89 +441,89 @@ export default {
   },
 
   mounted() {
-    ;[
-      'drag',
-      'dragstart',
-      'dragend',
-      'dragover',
-      'dragenter',
-      'dragleave',
-      'drop'
-    ].forEach(evt => {
-      if (this.$refs.wrapper) {
-        this.$refs.wrapper.addEventListener(evt, e => {
-          e.preventDefault()
-          e.stopPropagation()
-        })
-      }
+    const production = this.productionMap.get(this.task.project_id)
+    this.mode =
+      production.is_publish_default_for_artists && this.isCurrentUserArtist
+        ? 'publish'
+        : 'status'
+
+    this.$nextTick(() => {
+      ;[
+        'drag',
+        'dragstart',
+        'dragend',
+        'dragover',
+        'dragenter',
+        'dragleave',
+        'drop'
+      ].forEach(evt => {
+        if (this.$refs.wrapper) {
+          this.$refs.wrapper.addEventListener(evt, e => {
+            e.preventDefault()
+            e.stopPropagation()
+          })
+        }
+      })
     })
-    this.resetStatus()
   },
 
   computed: {
     ...mapGetters([
-      'currentProduction',
       'departmentMap',
-      'isDarkTheme',
       'isCurrentUserArtist',
       'isCurrentUserClient',
-      'uploadProgress',
       'productionDepartmentIds',
+      'productionMap',
       'taskStatusForCurrentUser',
+      'taskStatusMap',
       'taskTypeMap',
-      'taskStatusMap'
+      'uploadProgress'
     ]),
 
     attachmentModal() {
-      return this.$refs['add-comment-image-modal']
+      return this.$refs['add-attachment-modal']
     },
 
-    isAddChecklistAllowed() {
-      const status =
-        this.taskStatus.find(t => t.id === this.task_status_id) ||
-        this.taskStatus[0]
-      return status.is_retake && this.checklist.length === 0
+    isConcept() {
+      return this.$route.path.includes('concept')
     },
 
     isValidForm() {
-      return (
+      return Boolean(
         this.mode === 'status' ||
-        (this.mode == 'publish' &&
-          this.previewForms.length &&
-          (this.nextRevision === undefined ||
-            this.nextRevision > this.revision))
+          (this.mode === 'publish' &&
+            this.previewForms.length &&
+            (this.nextRevision === undefined ||
+              this.nextRevision > this.revision) &&
+            (!this.showLinkField ||
+              !this.link ||
+              this.$refs['input-link']?.checkValidity()))
       )
-    },
-
-    taskStatusColor() {
-      const status =
-        this.taskStatus.find(t => t.id === this.task_status_id) ||
-        this.taskStatus[0]
-      if (status.color === '#f5f5f5') {
-        return this.isDarkTheme ? '#666' : '#999'
-      } else {
-        const color = status.color
-        if (this.isDarkTheme) {
-          return colors.darkenColor(color)
-        } else {
-          return color
-        }
-      }
-    },
-
-    frame() {
-      return Math.floor(this.time * this.fps)
     }
   },
 
   methods: {
     shortenText: strings.shortenText,
+
+    toggleLinkField(reset = false) {
+      this.showLinkField = !this.showLinkField
+      if (this.showLinkField) {
+        this.$nextTick(() => {
+          this.$refs['input-link']?.focus()
+        })
+      }
+      if (reset) {
+        this.link = null
+      }
+    },
+
     runAddComment(
       text,
       attachments,
       checklist,
       taskStatusId,
       revision,
+      link,
       force = false
     ) {
       if (!this.isValidForm) {
@@ -521,23 +554,32 @@ export default {
         revision = undefined
       }
 
+      if (!this.showLinkField) {
+        link = null
+      }
+
       this.$emit(
         'add-comment',
         text,
         attachments,
         checklist,
         taskStatusId,
-        revision
+        revision,
+        link
       )
       this.text = ''
+      this.link = null
       this.attachments = []
       this.checklist = []
       this.nextRevision = undefined
     },
 
     focus() {
-      if (this.$refs['comment-textarea']) {
-        this.$refs['comment-textarea'].$el.focus()
+      const textarea = this.$refs['comment-textarea']
+      if (textarea) {
+        textarea.$el.focus()
+        const caretPosition = textarea.$el.value.length
+        textarea.$el.setSelectionRange(caretPosition, caretPosition)
       }
     },
 
@@ -564,16 +606,14 @@ export default {
     },
 
     resetStatus() {
-      if (this.task) {
-        const taskStatus = this.taskStatusMap.get(this.task.task_status_id)
-        if (
-          (!this.isCurrentUserArtist || taskStatus.is_artist_allowed) &&
-          (!this.isCurrentUserClient || taskStatus.is_client_allowed)
-        ) {
-          this.task_status_id = this.task.task_status_id
-        } else {
-          this.task_status_id = this.taskStatusForCurrentUser[0].id
-        }
+      const taskStatus = this.taskStatusMap.get(this.task.task_status_id)
+      if (
+        (!this.isCurrentUserArtist || taskStatus.is_artist_allowed) &&
+        (!this.isCurrentUserClient || taskStatus.is_client_allowed)
+      ) {
+        this.task_status_id = this.task.task_status_id
+      } else {
+        this.task_status_id = this.taskStatusForCurrentUser[0]?.id
       }
     },
 
@@ -586,6 +626,25 @@ export default {
     },
 
     onDrop(event) {
+      if (event.target.id === 'drop-mask') return
+      if (
+        event.target.parentElement?.className?.indexOf('add-attachment-box') >=
+        0
+      )
+        return
+      if (
+        event.target.parentElement?.className?.indexOf(
+          'add-attachment-buttons'
+        ) >= 0
+      )
+        return
+      if (
+        event.target.parentElement?.className?.indexOf(
+          'attachment-modal-box'
+        ) >= 0
+      )
+        return
+
       const forms = []
       for (let i = 0; i < event.dataTransfer.files.length; i++) {
         const form = new FormData()
@@ -600,7 +659,7 @@ export default {
       this.isDragging = false
     },
 
-    onAddCommentAttachmentClicked(comment) {
+    onAddCommentAttachmentClicked() {
       this.modals.addCommentAttachment = true
     },
 
@@ -632,23 +691,17 @@ export default {
 
     setValue(comment) {
       this.checklist = comment.checklist
-      this.$nextTick(() => {
-        this.$refs['comment-textarea'].value = comment.text
-        this.text = comment.text
-      })
+      this.text = comment.text
     },
 
-    onTextChanged(input) {
-      if (input.indexOf('@frame') >= 0) {
-        this.$nextTick(() => {
-          const text = replaceTimeWithTimecode(
-            this.$refs['comment-textarea'].value,
-            this.revision,
-            this.time,
-            this.fps
-          )
-          this.$refs['comment-textarea'].value = text
-        })
+    onAtTextChanged(input) {
+      if (input.includes('@frame')) {
+        this.text = replaceTimeWithTimecode(
+          input,
+          this.revision,
+          this.frame + 1,
+          this.fps
+        )
       }
     },
 
@@ -666,8 +719,19 @@ export default {
   },
 
   watch: {
-    task() {
-      this.resetStatus()
+    task: {
+      immediate: true,
+      handler() {
+        this.resetStatus()
+        const draft = drafts.getTaskDraft(this.task.id)
+        if (draft) {
+          this.text = draft
+        }
+      }
+    },
+
+    text() {
+      drafts.setTaskDraft(this.task.id, this.text)
     },
 
     mode() {
@@ -746,9 +810,10 @@ article.add-comment {
   textarea {
     margin: 0;
     min-height: 3.5em;
-    border-radius: 0px;
+    border-radius: 0;
 
     &:focus,
+    &:hover,
     &:active {
       border-color: var(--border-alt);
     }
@@ -770,6 +835,7 @@ article.add-comment {
   max-width: 30%;
 }
 
+.preview-delete-link,
 .preview-delete-revision {
   max-width: 10px;
   cursor: pointer;
@@ -818,7 +884,7 @@ article.add-comment {
     margin: 0;
     margin-right: 3px;
     color: var(--text-alt);
-    padding: 0em 10px;
+    padding: 0 10px;
 
     &:hover {
       color: var(--text);
@@ -841,7 +907,7 @@ article.add-comment {
   font-size: 0.9em;
   text-transform: uppercase;
   margin-top: 5px;
-  margin-bottom: 0px;
+  margin-bottom: 0;
 
   span {
     border-bottom: 1px solid var(--border);
@@ -889,6 +955,10 @@ article.add-comment {
     cursor: pointer;
     float: right;
   }
+}
+
+.link-field {
+  margin: 1em;
 }
 
 .post-area {

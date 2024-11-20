@@ -41,6 +41,7 @@
     <div class="query-list mt1">
       <search-query-list
         :queries="sequenceSearchQueries"
+        type="sequenceStat"
         @change-search="changeSearch"
         @remove-search="removeSearchQuery"
       />
@@ -65,13 +66,14 @@
 <script>
 import moment from 'moment'
 import { mapGetters, mapActions } from 'vuex'
+
 import csv from '@/lib/csv'
 import stringHelpers from '@/lib/string'
 
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import Combobox from '@/components/widgets/Combobox'
-import SearchField from '@/components/widgets/SearchField'
-import SearchQueryList from '@/components/widgets/SearchQueryList'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import Combobox from '@/components/widgets/Combobox.vue'
+import SearchField from '@/components/widgets/SearchField.vue'
+import SearchQueryList from '@/components/widgets/SearchQueryList.vue'
 import SequenceStatsList from '@/components/lists/SequenceStatsList.vue'
 
 export default {
@@ -97,7 +99,10 @@ export default {
       displayModeOptions: [
         { label: 'pie', value: 'pie' },
         { label: 'count', value: 'count' }
-      ]
+      ],
+      loading: {
+        savingSearch: false
+      }
     }
   },
 
@@ -176,7 +181,7 @@ export default {
       this.$router.push(this.sequencesPath)
     },
 
-    onSearchChange(event) {
+    onSearchChange() {
       const searchQuery = this.$refs['sequence-search-field'].getValue()
       this.setSequenceStatsSearch(searchQuery)
     },
@@ -190,7 +195,15 @@ export default {
     },
 
     saveSearchQuery(searchQuery) {
-      this.saveSequenceSearch(searchQuery).catch(console.error)
+      if (this.loading.savingSearch) {
+        return
+      }
+      this.loading.savingSearch = true
+      this.saveSequenceSearch(searchQuery)
+        .catch(console.error)
+        .finally(() => {
+          this.loading.savingSearch = false
+        })
     },
 
     removeSearchQuery(searchQuery) {
@@ -218,7 +231,8 @@ export default {
         this.taskTypeMap,
         this.taskStatusMap,
         this.sequenceMap,
-        this.countMode
+        this.countMode,
+        this.currentProduction
       )
     },
 

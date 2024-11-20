@@ -3,12 +3,13 @@
     <div class="flexrow">
       <date-field
         class="flexrow-item"
+        :can-delete="false"
         :disabled-dates="{ from: today }"
         :label="$t('logs.current_date_label')"
         v-model="currentDate"
       />
       <button-simple
-        class="flexrow-item"
+        class="flexrow-item small"
         icon="refresh"
         @click="loadDayEvents"
       />
@@ -81,14 +82,15 @@ import Vue from 'vue/dist/vue'
 import { formatFullDateWithRevertedTimezone } from '@/lib/time'
 import { timeMixin } from '@/components/mixins/time'
 
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import DateField from '@/components/widgets/DateField'
-import PeopleAvatar from '@/components/widgets/PeopleAvatar'
-import PeopleName from '@/components/widgets/PeopleName'
-import Spinner from '@/components/widgets/Spinner'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import DateField from '@/components/widgets/DateField.vue'
+import PeopleAvatar from '@/components/widgets/PeopleAvatar.vue'
+import PeopleName from '@/components/widgets/PeopleName.vue'
+import Spinner from '@/components/widgets/Spinner.vue'
 
 export default {
-  name: 'Events',
+  name: 'events',
+
   mixins: [timeMixin],
 
   components: {

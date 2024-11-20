@@ -4,24 +4,12 @@
       <div class="news page" ref="body" v-scroll="onBodyScroll">
         <div class="timeline-wrapper">
           <div class="has-text-right filler filter-button">
-            <span @click="toggleFilters">
-              <template v-if="isFiltersDisplayed">
-                {{ $t('main.less_filters') }}
-              </template>
-              <template v-else>
-                {{ $t('main.more_filters') }}
-              </template>
-            </span>
-            &bull;
-
-            <span @click="toggleStats">
-              <template v-if="isStatsDisplayed">
-                {{ $t('news.hide_stats') }}
-              </template>
-              <template v-else>
-                {{ $t('news.show_stats') }}
-              </template>
-            </span>
+            <button-simple
+              icon="filter"
+              :active="isFiltersDisplayed"
+              :title="$t('main.more_filters')"
+              @click="toggleFilters"
+            />
           </div>
 
           <div class="filters flexrow">
@@ -30,7 +18,7 @@
               :label="$t('shots.fields.episode')"
               :options="runningEpisodeOptions"
               v-model="episodeId"
-              v-show="isTVShow"
+              v-if="isTVShow"
             />
             <combobox-status
               class="flexrow-item selector"
@@ -44,15 +32,20 @@
               :task-type-list="taskTypeList"
               v-model="taskTypeId"
             />
-            <div class="field flexrow-item selector small">
+            <div class="flexrow-item selector">
               <label class="label person-label">
                 {{ $t('main.person') }}
               </label>
-              <people-field :people="team" :big="true" v-model="person" />
+              <people-field
+                class="person-field small"
+                big
+                :people="team"
+                v-model="person"
+              />
             </div>
           </div>
 
-          <div class="filters flexrow mt1" v-show="isFiltersDisplayed">
+          <div class="filters flexrow mt1" v-if="isFiltersDisplayed">
             <date-field
               class="flexrow-item"
               :disabled-dates="{ from: today }"
@@ -73,25 +66,6 @@
               :options="previewOptions"
               v-model="previewMode"
             />
-          </div>
-
-          <div class="stats mt1" v-if="isStatsDisplayed">
-            <span class="news-number">
-              {{ newsTotal }} {{ $t('news.news') }}
-            </span>
-            <template v-for="stat in renderedStats">
-              <span
-                :key="'stat-value-' + stat.name.toLowerCase()"
-                class="tag stat-tag"
-                :title="stat.name + ': ' + stat.value"
-                :style="{
-                  background: stat.color,
-                  color: stat.is_default ? '#666' : 'white'
-                }"
-              >
-                {{ stat.name }} : {{ stat.value }}
-              </span>
-            </template>
           </div>
 
           <div class="timeline">
@@ -150,11 +124,20 @@
                       />
                     </div>
 
+                    <people-avatar
+                      class="flexrow-item"
+                      :person="personMap.get(news.author_id)"
+                      :size="30"
+                      :font-size="14"
+                      :is-link="false"
+                      v-if="personMap.get(news.author_id)"
+                    />
+
                     <div class="flexrow-item task-type-wrapper">
                       <task-type-name
                         class="task-type-name"
                         :task-type="buildTaskTypeFromNews(news)"
-                        :production-id="currentProduction.id"
+                        :production-id="news.project_id"
                         :is-static="true"
                       />
                     </div>
@@ -171,31 +154,17 @@
                     <div class="flexrow-item comment-content">
                       <div>
                         <div class="news-info flexrow">
-                          <people-avatar
-                            class="flexrow-item"
-                            :person="personMap.get(news.author_id)"
-                            :size="30"
-                            :font-size="14"
-                            :is-link="false"
-                            v-if="personMap.get(news.author_id)"
-                          />
-                          <span class="explaination flexrow-item">
-                            <span class="strong person-name">
-                              {{ personName(news) }}
-                            </span>
-                            <span>
-                              {{ $t('news.commented_on') }}
-                            </span>
+                          <span class="explaination flexrow-item flexrow">
                             <entity-thumbnail
-                              class="ml05"
+                              class="ml1 entity-thumbnail mr1 flexrow-item"
                               :entity="{
                                 id: news.task_entity_id,
                                 preview_file_id: news.entity_preview_file_id
                               }"
-                              v-if="news.entity_preview_file_id"
+                              :with-link="false"
                             />
 
-                            <span class="strong">
+                            <span class="strong ml05">
                               {{ news.full_entity_name }}
                             </span>
                           </span>
@@ -229,40 +198,36 @@
                       {{ formatTime(news.created_at) }}
                     </span>
 
+                    <people-avatar
+                      class="flexrow-item"
+                      :person="personMap.get(news.author_id)"
+                      :size="30"
+                      :no-link="true"
+                      v-if="personMap.get(news.author_id)"
+                    />
+
                     <div class="flexrow-item task-type-wrapper">
                       <task-type-name
                         class="task-type-name"
                         :task-type="buildTaskTypeFromNews(news)"
-                        :production-id="currentProduction.id"
+                        :production-id="news.project_id"
                       />
                     </div>
 
                     <div class="flexrow-item comment-content">
                       <div>
                         <div class="news-info flexrow">
-                          <people-avatar
-                            class="flexrow-item"
-                            :person="personMap.get(news.author_id)"
-                            :size="30"
-                            :no-link="true"
-                            v-if="personMap.get(news.author_id)"
-                          />
-                          <span class="explaination flexrow-item">
-                            <span class="strong person-name">
-                              {{ personName(news) }}
-                            </span>
-                            <span>
-                              {{ $t('news.set_preview_on') }}
-                            </span>
+                          <span class="explaination flexrow-item flexrow">
                             <entity-thumbnail
-                              class="ml05"
+                              class="ml1"
                               :entity="{
                                 id: news.task_entity_id,
                                 preview_file_id: news.entity_preview_file_id
                               }"
+                              :with-link="false"
                               v-if="news.entity_preview_file_id"
                             />
-                            <span class="strong">
+                            <span class="strong ml05 flexrow-item">
                               {{ news.full_entity_name }}
                             </span>
                           </span>
@@ -273,7 +238,7 @@
 
                   <div
                     class="has-text-centered"
-                    v-if="previewMode == 'previews'"
+                    v-if="previewMode === 'previews'"
                   >
                     <preview-player
                       :canvas-id="`annotation-canvas-${dayList[0].created_at.substring(
@@ -287,6 +252,12 @@
                           annotations: news.preview_file_annotations
                         }
                       ]"
+                      :task="{
+                        id: news.task_id,
+                        project_id: news.project_id,
+                        task_type_id: news.task_type_id,
+                        assignees: []
+                      }"
                       :read-only="true"
                       :light="true"
                       :big="true"
@@ -300,12 +271,34 @@
       </div>
     </div>
 
-    <div id="side-column" class="column side-column" v-if="currentTask">
+    <div id="side-column" class="column side-column">
       <task-info
         :task="currentTask"
         :is-loading="loading.currentTask"
         with-actions
-      />
+      >
+        <div class="stats">
+          <div class="news-number mb1">
+            {{ newsTotal }} {{ $t('news.news') }}
+          </div>
+          <div
+            :key="'stat-' + stat.id"
+            class="stat-wrapper"
+            v-for="stat in renderedStats"
+          >
+            <span
+              class="stat-tag"
+              :title="stat.name + ': ' + stat.value"
+              :style="{
+                background: stat.color,
+                width: (stat.value / statMax) * 100 + '%'
+              }"
+            >
+              <div class="stat-text">{{ stat.name }} : {{ stat.value }}</div>
+            </span>
+          </div>
+        </div>
+      </task-info>
     </div>
   </div>
 </template>
@@ -319,28 +312,33 @@
  */
 import { mapGetters, mapActions } from 'vuex'
 import moment from 'moment-timezone'
-import { sortByName } from '@/lib/sorting'
+
+import { sortByName, sortPeople } from '@/lib/sorting'
 import { formatFullDateWithRevertedTimezone } from '@/lib/time'
 import { timeMixin } from '@/components/mixins/time'
 
-import Combobox from '@/components/widgets/Combobox'
-import ComboboxStatus from '@/components/widgets/ComboboxStatus'
-import ComboboxTaskType from '@/components/widgets/ComboboxTaskType'
-import DateField from '@/components/widgets/DateField'
-import PeopleField from '@/components/widgets/PeopleField'
-import EntityThumbnail from '@/components/widgets/EntityThumbnail'
-import PeopleAvatar from '@/components/widgets/PeopleAvatar'
-import ProductionName from '@/components/widgets/ProductionName'
-import TaskInfo from '@/components/sides/TaskInfo'
-import TaskTypeName from '@/components/widgets/TaskTypeName'
-import Spinner from '@/components/widgets/Spinner'
-import ValidationTag from '@/components/widgets/ValidationTag'
-import PreviewPlayer from '@/components/previews/PreviewPlayer'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import Combobox from '@/components/widgets/Combobox.vue'
+import ComboboxStatus from '@/components/widgets/ComboboxStatus.vue'
+import ComboboxTaskType from '@/components/widgets/ComboboxTaskType.vue'
+import DateField from '@/components/widgets/DateField.vue'
+import PeopleField from '@/components/widgets/PeopleField.vue'
+import EntityThumbnail from '@/components/widgets/EntityThumbnail.vue'
+import PeopleAvatar from '@/components/widgets/PeopleAvatar.vue'
+import PreviewPlayer from '@/components/previews/PreviewPlayer.vue'
+import ProductionName from '@/components/widgets/ProductionName.vue'
+import TaskInfo from '@/components/sides/TaskInfo.vue'
+import TaskTypeName from '@/components/widgets/TaskTypeName.vue'
+import Spinner from '@/components/widgets/Spinner.vue'
+import ValidationTag from '@/components/widgets/ValidationTag.vue'
 
 export default {
-  name: 'news-page',
+  name: 'production-news-feed',
+
   mixins: [timeMixin],
+
   components: {
+    ButtonSimple,
     Combobox,
     ComboboxStatus,
     ComboboxTaskType,
@@ -442,13 +440,23 @@ export default {
       'user'
     ]),
 
+    statMax() {
+      if (this.newsStats) {
+        return Object.keys(this.newsStats).reduce((max, stat) => {
+          return Math.max(this.newsStats[stat], max)
+        }, 0)
+      } else {
+        return 0
+      }
+    },
+
     isStudio() {
       return this.$route.path.indexOf('productions') < 0
     },
 
     params() {
       const params = {
-        productionId: this.currentProduction.id,
+        productionId: this.currentProduction?.id,
         only_preview: this.previewMode === 'previews',
         page_size: this.previewMode === 'previews' ? 6 : 50,
         task_type_id: this.taskTypeId !== '' ? this.taskTypeId : undefined,
@@ -501,26 +509,23 @@ export default {
     },
 
     team() {
-      return this.currentProduction.team
-        .map(pId => this.personMap.get(pId))
-        .sort((a, b) => a.full_name.localeCompare(b.full_name))
+      const team = this.currentProduction?.team || []
+      return sortPeople(team.map(personId => this.personMap.get(personId)))
     },
 
     renderedStats() {
       if (this.newsStats) {
         return Object.keys(this.newsStats)
           .map(taskStatusId => {
-            const name = this.taskStatusMap
-              .get(taskStatusId)
-              .short_name.toUpperCase()
-            const color = this.taskStatusMap.get(taskStatusId).color
+            const { color, short_name } = this.taskStatusMap.get(taskStatusId)
             return {
-              name,
+              id: taskStatusId,
+              name: short_name.toUpperCase(),
               color,
               value: this.newsStats[taskStatusId]
             }
           })
-          .sort((a, b) => a.name.localeCompare(b.name))
+          .sort((a, b) => b.value - a.value)
       } else {
         return ''
       }
@@ -806,13 +811,6 @@ export default {
     color: $light-grey-light;
   }
 
-  .stats {
-    .news-number {
-      border: 2px solid $light-grey;
-      color: $light-grey;
-    }
-  }
-
   .timeline-wrapper {
     background: $dark-grey;
   }
@@ -862,7 +860,7 @@ export default {
 
 .timeline-wrapper {
   margin: auto;
-  max-width: 875px;
+  max-width: 920px;
   padding-top: 25px;
   padding-left: 25px;
   padding-right: 25px;
@@ -896,10 +894,10 @@ export default {
     .dot {
       position: absolute;
       display: block;
-      left: -31px;
+      left: -34px;
       background: $blue-light;
-      width: 8px;
-      height: 8px;
+      width: 9px;
+      height: 9px;
       border-radius: 4px;
 
       &.red {
@@ -917,24 +915,11 @@ export default {
   }
 
   .validation-wrapper {
-    min-width: 60px;
+    min-width: 80px;
   }
 
   .date {
     min-width: 30px;
-  }
-
-  .selected .date {
-    color: $dark-grey;
-  }
-
-  .explaination,
-  .explaination span {
-    display: inline;
-
-    &.entity-thumbnail {
-      display: inline-block;
-    }
   }
 }
 
@@ -957,22 +942,25 @@ export default {
 .news-line {
   padding-left: 1em;
   align-items: middle;
+  border: 3px solid transparent;
   cursor: pointer;
-  padding-top: 0.5em;
-  padding-bottom: 0.5em;
+  margin-bottom: 1px;
+  padding-top: 0.3em;
+  padding-bottom: 0.3em;
   border-radius: 0.5em;
+  transition: border 0.1s linear;
 
   &:hover {
-    background: var(--background-hover);
+    border: 3px solid var(--background-selectable);
   }
 
   &.selected {
-    background: var(--background-selected);
+    border: 3px solid var(--background-selected);
   }
 }
 
 .preview {
-  margin: 0em auto 2em auto;
+  margin: 0 auto 2em auto;
   max-width: 800px;
 }
 
@@ -992,6 +980,10 @@ export default {
   margin-bottom: 4px;
 }
 
+.person-field :deep(.v-autocomplete) {
+  z-index: 501; // +1 relative to the z-index of canvas-wrapper
+}
+
 .filter-button {
   color: $grey;
   cursor: pointer;
@@ -1001,20 +993,43 @@ export default {
 
 .stats {
   text-align: left;
-  margin-top: 2em;
+  width: 100%;
+  flex: 1;
 
   .news-number {
     font-weight: bold;
-    border: 2px solid $grey-strong;
-    border-radius: 1em;
-    padding: 0.3em;
-    margin-right: 0.8em;
+    border-bottom: 1px solid var(--border-alt);
+    padding: 0.6em;
   }
 
   .stat-tag {
+    border-radius: 6px;
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 0 2px var(--box-shadow);
+    display: inline-block;
+    font-size: 0.8em;
+    height: 32px;
+    padding-left: 4px;
     margin-right: 1em;
     margin-top: 0;
-    margin-bottom: 1em;
+    margin-bottom: 0.4em;
+    font-weight: bold;
+    width: 100%;
   }
+
+  .stat-text {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.8);
+    font-weight: bold;
+    padding: 4px 8px;
+    margin-top: 3px;
+    color: $black;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+}
+
+.preview .news-line .dot {
+  left: -54px;
 }
 </style>

@@ -1,24 +1,22 @@
 <template>
   <div
-    :id="'casting-' + asset.id"
+    :id="`casting-${asset.id}`"
+    class="asset"
     :class="{
-      asset: true,
+      active,
       'big-asset': bigMode,
-      active: active
+      shared: asset.shared
     }"
     :title="asset.name"
     v-if="!textMode"
   >
     <div class="asset-add" @click="addOneAsset">+ 1</div>
     <div class="asset-add-10" @click="addTenAssets">+ 10</div>
-    <div class="asset-picture" v-if="asset.preview_file_id.length > 0">
+    <div class="asset-picture" v-if="asset.preview_file_id">
       <img
-        v-lazy="
-          '/api/pictures/thumbnails-square/preview-files/' +
-          asset.preview_file_id +
-          '.png'
-        "
+        loading="lazy"
         alt=""
+        :src="`/api/pictures/thumbnails-square/preview-files/${asset.preview_file_id}.png`"
       />
     </div>
     <div class="asset-picture" v-else>
@@ -27,7 +25,13 @@
       </span>
     </div>
   </div>
-  <div class="asset-text flexrow-item flexrow" v-else>
+  <div
+    class="asset-text flexrow-item flexrow"
+    :class="{
+      shared: asset.shared
+    }"
+    v-else
+  >
     <span class="asset-text-name flexrow-item">
       {{ asset.name }}
     </span>
@@ -38,6 +42,7 @@
 <script>
 export default {
   name: 'available-asset-block',
+
   props: {
     asset: {
       default: () => ({
@@ -59,7 +64,7 @@ export default {
       type: Boolean
     }
   },
-  computed: {},
+
   methods: {
     addOneAsset(event) {
       if (this.active) {
@@ -108,7 +113,7 @@ export default {
   position: relative;
   top: 0;
   left: 0;
-  margin-top: 0px;
+  margin-top: 0;
   width: 60px;
   height: 30px;
   background: #e1d4f9;
@@ -155,6 +160,10 @@ export default {
       height: 50px;
     }
   }
+
+  &.shared {
+    box-shadow: 0 0 0 2px var(--shared-color);
+  }
 }
 
 .asset-picture {
@@ -194,5 +203,9 @@ export default {
 .asset-text {
   font-size: 0.9em;
   margin-bottom: 0.5em;
+
+  &.shared {
+    box-shadow: 0 0 0 2px var(--shared-color);
+  }
 }
 </style>

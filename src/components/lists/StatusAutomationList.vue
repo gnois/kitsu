@@ -19,8 +19,11 @@
             <th scope="col" class="out-task-type">
               {{ $t('status_automations.fields.out_task_type') }}
             </th>
-            <th scope="col" class="in-task-status">
+            <th scope="col" class="out-task-status">
               {{ $t('status_automations.fields.out_task_status') }}
+            </th>
+            <th scope="col" class="import-last-revision">
+              {{ $t('status_automations.fields.import_last_revision') }}
             </th>
             <th scope="col" class="actions">&nbsp;</th>
           </tr>
@@ -45,11 +48,11 @@
                 </span>
               </div>
             </td>
-            <task-type-name
+            <task-type-cell
               class="in-task-type"
               :task-type="getTaskType(statusAutomation.in_task_type_id)"
             />
-            <task-status-name
+            <task-status-cell
               class="in-task-status"
               :entry="getTaskStatus(statusAutomation.in_task_status_id)"
             />
@@ -60,16 +63,19 @@
                   : $t('status_automations.change_status')
               }}
             </td>
-            <task-type-name
+            <task-type-cell
               class="out-task-type"
               :task-type="getTaskType(statusAutomation.out_task_type_id)"
             />
-            <task-status-name
+            <task-status-cell
               class="out-task-status"
               v-if="statusAutomation.out_field_type === 'status'"
               :entry="getTaskStatus(statusAutomation.out_task_status_id)"
             />
             <td class="name out-task-status" v-else></td>
+            <td class="import-last-revision">
+              {{ formatBoolean(statusAutomation.import_last_revision) }}
+            </td>
             <row-actions-cell
               :entry-id="statusAutomation.id"
               @edit-clicked="$emit('edit-clicked', statusAutomation)"
@@ -99,25 +105,27 @@
 </template>
 
 <script>
+import { AlertTriangleIcon } from 'lucide-vue'
 import { mapGetters, mapActions } from 'vuex'
+
 import { formatListMixin } from '@/components/mixins/format'
 
-import { AlertTriangleIcon } from 'vue-feather-icons'
-import RowActionsCell from '@/components/cells/RowActionsCell'
-import TableInfo from '@/components/widgets/TableInfo'
-import TaskTypeName from '@/components/cells/TaskTypeName'
-import TaskStatusName from '@/components/cells/TaskStatusName'
+import RowActionsCell from '@/components/cells/RowActionsCell.vue'
+import TableInfo from '@/components/widgets/TableInfo.vue'
+import TaskStatusCell from '@/components/cells/TaskStatusCell.vue'
+import TaskTypeCell from '@/components/cells/TaskTypeCell.vue'
 
 export default {
   name: 'status-automation-list',
+
   mixins: [formatListMixin],
 
   components: {
     AlertTriangleIcon,
     RowActionsCell,
     TableInfo,
-    TaskTypeName,
-    TaskStatusName
+    TaskStatusCell,
+    TaskTypeCell
   },
 
   props: {
@@ -139,15 +147,10 @@ export default {
     }
   },
 
-  data() {
-    return {}
-  },
-
   computed: {
     ...mapGetters([
       'getTaskStatus',
       'getTaskType',
-      'isTaskTypePriorityHigherById',
       'isStatusAutomationDisabled',
       'remainingStatusAutomations'
     ])
@@ -174,9 +177,12 @@ export default {
 }
 
 .name {
-  text-transform: capitalize;
   width: 120px;
   min-width: 120px;
+}
+
+td.name {
+  text-transform: capitalize;
 }
 
 .in-task-type {

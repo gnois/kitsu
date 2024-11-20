@@ -10,7 +10,6 @@ import Chart from 'chart.js'
 import Meta from 'vue-meta'
 import VueChartkick from 'vue-chartkick'
 import VueDragDrop from 'vue-drag-drop'
-import VueLazyload from 'vue-lazyload'
 import vuescroll from 'vue-scroll'
 import VueTextareaAutosize from 'vue-textarea-autosize'
 import VueWebsocket from 'vue-websocket-next'
@@ -25,7 +24,6 @@ Vue.use(Autocomplete)
 Vue.use(Meta)
 Vue.use(resizableColumn)
 Vue.use(VueChartkick, { adapter: Chart })
-Vue.use(VueLazyload)
 Vue.use(vuescroll)
 Vue.use(VueDragDrop)
 Vue.use(VueTextareaAutosize)
@@ -34,23 +32,12 @@ Vue.use(VueAnimXYZ)
 // Make the current route part of the main state.
 sync(store, router)
 
-// Global custom directive to enable automatic focus on field after page
-// loading.
+// Global custom directive to enable automatic focus on field after page loading.
 Vue.directive('focus', {
   inserted(el, binding) {
     el.focus(binding.value)
   }
 })
-
-// Allow access to i18n object from vue instance.
-Vue.prototype.$locale = {
-  change(locale) {
-    i18n.locale = locale
-  },
-  current() {
-    return i18n.locale
-  }
-}
 
 // Start application.
 new Vue({

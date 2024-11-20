@@ -10,7 +10,7 @@
     <div class="modal-content">
       <div class="box">
         <page-title class="title" :text="$t('shots.manage')" />
-        <div class="explaination">{{ $t('shots.creation_explaination') }}</div>
+        <div class="explanation">{{ $t('shots.creation_explanation') }}</div>
         <div>
           <div class="flexrow">
             <combobox
@@ -44,7 +44,7 @@
               <input
                 class="input"
                 ref="addEpisodeInput"
-                placeholder="EP01"
+                :placeholder="$t('episodes.fields.placeholder')"
                 type="text"
                 @keyup.tab="focusAddSequence"
                 @keyup.enter="addEpisode"
@@ -85,7 +85,7 @@
               <input
                 class="input"
                 ref="addSequenceInput"
-                placeholder="SQ01"
+                :placeholder="$t('sequences.fields.placeholder')"
                 type="text"
                 @keyup.enter="addSequence"
                 v-model="names.sequence"
@@ -118,7 +118,7 @@
             <div class="field">
               <input
                 class="input"
-                placeholder="SH01"
+                :placeholder="$t('shots.fields.placeholder')"
                 ref="addShotInput"
                 type="text"
                 @keyup.enter="addShot"
@@ -156,13 +156,15 @@ import { mapGetters } from 'vuex'
 
 import { modalMixin } from '@/components/modals/base_modal'
 
-import Combobox from '@/components/widgets/Combobox'
-import PageTitle from '@/components/widgets/PageTitle'
 import stringHelpers from '@/lib/string'
 import { sortByName } from '@/lib/sorting'
 
+import Combobox from '@/components/widgets/Combobox.vue'
+import PageTitle from '@/components/widgets/PageTitle.vue'
+
 export default {
-  name: 'manage-shot-modal',
+  name: 'manage-shots-modal',
+
   mixins: [modalMixin],
 
   components: {
@@ -430,7 +432,7 @@ input::placeholder {
   color: #bbb;
 }
 
-.explaination {
+.explanation {
   margin-bottom: 1em;
 }
 

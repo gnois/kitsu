@@ -20,13 +20,18 @@
                 :style="getValidationStyle(columnId)"
               >
                 <router-link
-                  class="flexrow-item"
+                  class="flexrow-item ellipsis"
+                  :title="taskTypeMap.get(columnId).name"
                   :to="taskTypePath(columnId)"
                   v-if="!isCurrentUserClient"
                 >
                   {{ taskTypeMap.get(columnId).name }}
                 </router-link>
-                <span class="flexrow-item" v-else>
+                <span
+                  class="flexrow-item ellipsis"
+                  :title="taskTypeMap.get(columnId).name"
+                  v-else
+                >
                   {{ taskTypeMap.get(columnId).name }}
                 </span>
               </div>
@@ -43,7 +48,7 @@
             <stats-cell
               :colors="chartColors('all', 'all')"
               :data="chartData('all', 'all')"
-              :displayMode="displayMode"
+              :display-mode="displayMode"
             />
 
             <stats-cell
@@ -51,7 +56,7 @@
               :key="'all-' + columnId"
               :colors="chartColors('all', columnId)"
               :data="chartData('all', columnId)"
-              :displayMode="displayMode"
+              :display-mode="displayMode"
               v-for="columnId in validationColumns"
             />
 
@@ -66,7 +71,7 @@
             <stats-cell
               :colors="chartColors(entry.id, 'all')"
               :data="chartData(entry.id, 'all')"
-              :displayMode="displayMode"
+              :display-mode="displayMode"
               v-if="isStats(entry.id, 'all')"
             />
             <td v-else></td>
@@ -76,7 +81,7 @@
               :style="getValidationStyle(columnId)"
               :colors="chartColors(entry.id, columnId)"
               :data="chartData(entry.id, columnId)"
-              :displayMode="displayMode"
+              :display-mode="displayMode"
               v-if="isStats(entry.id, columnId)"
               v-for="columnId in validationColumns"
             />
@@ -98,11 +103,6 @@
         <img src="../../assets/illustrations/empty_asset.png" />
       </p>
       <p class="info">{{ $t('assets.empty_list') }}</p>
-      <button-link
-        class="level-item big-button"
-        :text="$t('assets.new_asset')"
-        :path="newAssetPath"
-      />
     </div>
     <div
       class="has-text-centered"
@@ -125,15 +125,18 @@
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
-import { entityListMixin } from '@/components/mixins/entity_list'
+import { mapGetters } from 'vuex'
+
 import { getChartColors, getChartData } from '@/lib/stats'
-import ButtonLink from '@/components/widgets/ButtonLink'
-import StatsCell from '@/components/cells/StatsCell'
-import TableInfo from '@/components/widgets/TableInfo'
+
+import { entityListMixin } from '@/components/mixins/entity_list'
+
+import StatsCell from '@/components/cells/StatsCell.vue'
+import TableInfo from '@/components/widgets/TableInfo.vue'
 
 export default {
   name: 'production-asset-type-list',
+
   mixins: [entityListMixin],
 
   props: {
@@ -167,15 +170,7 @@ export default {
     }
   },
 
-  data() {
-    return {
-      busy: false,
-      lastSelection: null
-    }
-  },
-
   components: {
-    ButtonLink,
     StatsCell,
     TableInfo
   },
@@ -199,28 +194,10 @@ export default {
         !this.isError &&
         (!this.assetTypeSearchText || this.assetTypeSearchText.length === 0)
       )
-    },
-
-    newAssetPath() {
-      const route = {
-        name: 'new-asset',
-        params: {
-          production_id: this.currentProduction.id
-        }
-      }
-
-      if (this.isTVShow && this.currentEpisode) {
-        route.name = 'episode-new-asset'
-        route.params.episode_id = this.currentEpisode.id
-      }
-
-      return route
     }
   },
 
   methods: {
-    ...mapActions([]),
-
     chartColors(entryId, columnId) {
       return getChartColors(this.assetTypeStats, entryId, columnId)
     },

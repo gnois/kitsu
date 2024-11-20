@@ -1,12 +1,12 @@
 <template>
   <div
+    class="topbar-menuitem"
     :class="{
-      'topbar-menuitem': true,
       'topbar-menuitem-open': showEpisodeList
     }"
   >
     <div class="episode-menu">
-      <div class="flexrow unselectable root-menu" @click="toggleEpisodeList">
+      <div class="flexrow unselectable" @click="toggleEpisodeList">
         <div class="selected-production-line flexrow-item">
           {{ episodeLabel }}
         </div>
@@ -55,15 +55,15 @@
 </template>
 
 <script>
+import { ChevronDownIcon } from 'lucide-vue'
 import { mapGetters } from 'vuex'
-import { ChevronDownIcon } from 'vue-feather-icons'
 
 import { getProductionPath } from '@/lib/path'
 
-import ComboboxMask from '@/components/widgets/ComboboxMask'
+import ComboboxMask from '@/components/widgets/ComboboxMask.vue'
 
 export default {
-  name: 'topbar-episode-menu',
+  name: 'topbar-episode-list',
 
   components: {
     ChevronDownIcon,
@@ -90,10 +90,8 @@ export default {
     }
   },
 
-  mounted() {},
-
   computed: {
-    ...mapGetters(['episodeMap', 'currentProduction']),
+    ...mapGetters(['currentProduction']),
 
     episodeLabel() {
       let option
@@ -155,10 +153,6 @@ export default {
       color: $white;
     }
   }
-
-  .episode-line:hover {
-    background: $dark-purple;
-  }
 }
 
 .episode-combo {
@@ -200,7 +194,7 @@ export default {
   }
 
   &:hover {
-    background: #eee;
+    background: var(--background-hover);
   }
 }
 
@@ -232,16 +226,13 @@ export default {
   border-bottom-right-radius: 5px;
   text-align: left;
   margin-left: -11px;
-  max-height: 400px;
+  max-height: min(80vh, 600px);
   min-width: 120px;
   overflow-y: auto;
   padding: 5px;
   padding-bottom: 10px;
   top: 49px;
   z-index: 300;
-}
-
-.root-menu {
 }
 
 .topbar-menuitem {
@@ -253,8 +244,8 @@ export default {
   border-radius: 10px;
 
   &.topbar-menuitem-open {
-    border-bottom-left-radius: 0px;
-    border-bottom-right-radius: 0px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
   }
 }
 

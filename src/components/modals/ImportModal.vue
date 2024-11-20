@@ -8,7 +8,7 @@
     <div class="modal-background" @click="$emit('cancel')"></div>
 
     <div class="modal-content">
-      <div class="box content">
+      <div class="box">
         <h1 class="title">
           {{ $t('main.csv.import_title') }}
         </h1>
@@ -77,19 +77,22 @@
 
 <script>
 import { modalMixin } from '@/components/modals/base_modal'
+
 import FileUpload from '@/components/widgets/FileUpload.vue'
-import ModalFooter from '@/components/modals/ModalFooter'
-import Tabs from '@/components/widgets/Tabs'
-import Tab from '@/components/widgets/Tab'
+import ModalFooter from '@/components/modals/ModalFooter.vue'
+import Tab from '@/components/widgets/Tab.vue'
+import Tabs from '@/components/widgets/Tabs.vue'
 
 export default {
-  name: 'import-people-modal',
+  name: 'import-modal',
+
   mixins: [modalMixin],
+
   components: {
     FileUpload,
     ModalFooter,
-    Tabs,
-    Tab
+    Tab,
+    Tabs
   },
 
   data() {

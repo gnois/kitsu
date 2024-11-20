@@ -7,7 +7,7 @@
     </div>
 
     <div class="flexrow">
-      <people-avatar class="flexrow-item" :person="person" :no-cache="true" />
+      <people-avatar class="flexrow-item" :person="person" :is-lazy="false" />
       <page-title class="flexrow-item" :text="person.full_name" />
     </div>
 
@@ -18,10 +18,14 @@
     <div class="info-date" v-if="isMonthInfo">{{ monthString }} {{ year }}</div>
 
     <div class="info-date" v-else-if="isWeekInfo">
-      week {{ week }}, {{ startDay }} - {{ endDay }} {{ weekMonth }} {{ year }}
+      {{ $t('main.week') }}
+      {{ week }}, {{ startDay }} - {{ endDay }} {{ weekMonth }} {{ year }}
     </div>
 
-    <div class="info-day-off" v-if="!isDayInfo">{{ dayOffCount }} days off</div>
+    <div class="info-day-off" v-if="!isDayInfo">
+      {{ dayOffCount }}
+      {{ $tc('days_off.nb_days_off', dayOffCount) }}
+    </div>
 
     <div class="info-date" v-else-if="isDayInfo">
       {{ day }} {{ monthString }} {{ year }}
@@ -37,23 +41,23 @@
 </template>
 
 <script>
+import { XIcon } from 'lucide-vue'
 import moment from 'moment-timezone'
 
-import { mapGetters, mapActions } from 'vuex'
-import { XIcon } from 'vue-feather-icons'
-import PageTitle from '@/components/widgets/PageTitle'
-import PeopleAvatar from '@/components/widgets/PeopleAvatar'
-import TimeSpentTaskList from '@/components/lists/TimeSpentTaskList'
 import { monthToString } from '@/lib/time'
+
+import PageTitle from '@/components/widgets/PageTitle.vue'
+import PeopleAvatar from '@/components/widgets/PeopleAvatar.vue'
+import TimeSpentTaskList from '@/components/lists/TimeSpentTaskList.vue'
 
 export default {
   name: 'people-timesheet-info',
 
   components: {
-    XIcon,
     PageTitle,
     PeopleAvatar,
-    TimeSpentTaskList
+    TimeSpentTaskList,
+    XIcon
   },
 
   props: {
@@ -96,8 +100,6 @@ export default {
   },
 
   computed: {
-    ...mapGetters([]),
-
     startDay() {
       return moment().day('Monday').year(this.year).week(this.week).date()
     },
@@ -107,7 +109,7 @@ export default {
         .day('Monday')
         .year(this.year)
         .week(this.week)
-        .add('days', 6)
+        .add(6, 'days')
         .date()
     },
 
@@ -140,37 +142,56 @@ export default {
     },
 
     closeRoute() {
-      if (this.isMonthInfo) {
+      const query = {
+        productionId: this.$route.query.productionId,
+        studioId: this.$route.query.studioId
+      }
+      if (this.isYearInfo) {
+        return {
+          name: 'timesheets-year',
+          params: {
+            year: this.year
+          },
+          query
+        }
+      } else if (this.isMonthInfo) {
         return {
           name: 'timesheets-month',
           params: {
-            year: this.year
-          }
+            year: this.year,
+            month: this.month
+          },
+          query
         }
       } else if (this.isWeekInfo) {
         return {
           name: 'timesheets-week',
           params: {
-            year: this.year
-          }
+            year: this.year,
+            week: this.week
+          },
+          query
         }
       } else if (this.isDayInfo) {
         return {
           name: 'timesheets-day',
           params: {
             year: this.year,
-            month: this.month
-          }
+            month: this.month,
+            day: this.day
+          },
+          query
         }
       } else {
-        return { name: 'timesheets' }
+        return {
+          name: 'timesheets',
+          query
+        }
       }
     }
   },
 
   methods: {
-    ...mapActions([]),
-
     onCloseClicked() {
       this.$emit('close')
     }
@@ -191,9 +212,6 @@ export default {
   font-size: 1.5em;
   margin-top: 1em;
   text-transform: capitalize;
-}
-
-.info-day-off {
 }
 
 .close {

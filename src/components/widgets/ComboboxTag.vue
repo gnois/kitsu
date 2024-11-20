@@ -42,7 +42,9 @@
 </template>
 
 <script>
-import { ChevronDownIcon } from 'vue-feather-icons'
+import { ChevronDownIcon } from 'lucide-vue'
+
+import { sortByValue } from '@/lib/sorting'
 
 export default {
   name: 'combobox-tag',
@@ -94,15 +96,15 @@ export default {
 
   computed: {
     optionList() {
+      const sortedOptions = sortByValue([...this.options])
       if (this.isReversed) {
-        return [...this.options].reverse()
-      } else {
-        return this.options
+        sortedOptions.reverse()
       }
+      return sortedOptions
     },
 
     renderedValue() {
-      return this.value.split(',').filter(Boolean).join(', ')
+      return this.value.split(',').filter(Boolean).sort().join(', ')
     }
   },
 
@@ -137,11 +139,10 @@ export default {
     },
 
     getOptionLabel(option) {
-      if (this.localeKeyPrefix.length > 0) {
+      if (this.localeKeyPrefix && option.label) {
         return this.$t(this.localeKeyPrefix + option.label.toLowerCase())
-      } else {
-        return option.label
       }
+      return option.label
     },
 
     isChecked(option) {
@@ -199,8 +200,8 @@ export default {
   vertical-align: middle;
 
   &.open {
-    border-bottom-left-radius: 0em;
-    border-bottom-right-radius: 0em;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
   }
 
   &.shy {
@@ -270,12 +271,13 @@ export default {
   overflow-x: hidden;
   overflow-y: auto;
   position: absolute;
-  width: inherit;
+  min-width: 150px;
   top: 38px;
   z-index: 2000;
 
   .option-line {
     padding-right: 27px;
+    white-space: nowrap;
   }
 }
 
@@ -299,8 +301,8 @@ export default {
 
 .reversed {
   &.open {
-    border-top-left-radius: 0em;
-    border-top-right-radius: 0em;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
     border-bottom-left-radius: 1em;
     border-bottom-right-radius: 1em;
   }
@@ -308,8 +310,8 @@ export default {
   .select-input {
     border-top-left-radius: 1em;
     border-top-right-radius: 1em;
-    border-bottom-left-radius: 0em;
-    border-bottom-right-radius: 0em;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
     height: 180px;
     top: -180px;
   }

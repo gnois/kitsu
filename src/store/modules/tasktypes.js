@@ -26,12 +26,16 @@ const state = {
 }
 
 const getters = {
-  taskTypes: state => state.taskTypes,
+  taskTypes: state => state.taskTypes.filter(taskType => !taskType.archived),
+  archivedTaskTypes: state =>
+    state.taskTypes.filter(taskType => taskType.archived),
   taskTypeMap: state => state.taskTypeMap,
   sequenceSubscriptions: state => state.sequenceSubscriptions,
 
   currentTaskType: (state, getters, rootState) => {
-    return state.taskTypeMap.get(rootState.route.params.task_type_id) || {}
+    const route = rootState.route || {}
+    const params = route.params || {}
+    return state.taskTypeMap.get(params.task_type_id) || {}
   },
 
   assetTaskTypes: (state, getters, rootState, rootGetters) => {

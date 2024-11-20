@@ -3,17 +3,20 @@
     scope="col"
     class="metadata-descriptor"
     :class="{ 'datatable-row-header': isStick }"
-    :style="{ left: left }"
+    :style="{ left }"
   >
     <div class="flexrow metadata-wrapper-header">
       <department-name
         :key="department.id"
         :department="department"
-        :only-dot="true"
-        :style="{ padding: '0px 0px' }"
+        no-padding
+        only-dot
         v-for="department in currentDepartments"
       />
-      <span class="flexrow-item descriptor-name">
+      <span
+        class="flexrow-item ellipsis descriptor-name"
+        :title="descriptor.name"
+      >
         {{ descriptor.name }}
       </span>
 
@@ -22,20 +25,21 @@
         @click="$emit('show-metadata-header-menu', $event)"
         v-if="!noMenu"
       >
-        <chevron-down-icon :size="'12'" />
+        <chevron-down-icon :size="12" />
       </span>
     </div>
   </th>
 </template>
 
 <script>
-import { ChevronDownIcon } from 'vue-feather-icons'
-
 import { mapGetters } from 'vuex'
-import DepartmentName from '@/components/widgets/DepartmentName'
+import { ChevronDownIcon } from 'lucide-vue'
+
+import DepartmentName from '@/components/widgets/DepartmentName.vue'
 
 export default {
   name: 'metadata-header',
+
   props: {
     descriptor: Object,
     isStick: {
@@ -51,9 +55,14 @@ export default {
       default: false
     }
   },
-  components: { ChevronDownIcon, DepartmentName },
+
+  components: {
+    ChevronDownIcon,
+    DepartmentName
+  },
+
   computed: {
-    ...mapGetters(['departmentMap', 'taskTypeMap']),
+    ...mapGetters(['departmentMap']),
 
     currentDepartments() {
       const departemts = this.descriptor.departments || []

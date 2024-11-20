@@ -2,28 +2,17 @@
   <div class="avatar-wrapper">
     <span
       class="avatar has-text-centered"
+      :class="{ bot: person.is_bot }"
       :title="person.full_name"
-      :style="{
-        background: person.color,
-        width: size + 'px',
-        height: size + 'px',
-        'font-size': fontSize + 'px'
-      }"
+      :style="style"
     >
       <img
-        class="avatar-image"
-        :src="avatarPath"
-        v-if="person.has_avatar && noCache"
+        :loading="isLazy ? 'lazy' : undefined"
+        alt=""
+        :src="person.avatarPath"
+        v-if="person.has_avatar"
       />
-      <img
-        class="avatar-image"
-        v-lazy="avatarPath"
-        :key="avatarKey"
-        v-else-if="person.has_avatar"
-      />
-      <span v-else>
-        {{ initials }}
-      </span>
+      <template v-else>{{ person.initials }}</template>
     </span>
 
     <div class="avatar-menu">
@@ -31,34 +20,31 @@
         :to="{ name: 'person', params: { person_id: person.id } }"
         class="menu-button flexrow"
       >
-        <user-icon class="flexrow-item" size="1.2x" />
-        <span class="flexrow-item">Open {{ person.name }} page</span>
+        <user-icon class="flexrow-item" :size="16" />
+        <span class="flexrow-item">
+          {{ $t('main.avatar.open_page', { personName: person.name }) }}
+        </span>
       </router-link>
       <div class="menu-button flexrow" @click.stop="$emit('unassign', person)">
-        <user-minus-icon class="flexrow-item" size="1.2x" />
-        <span class="flexrow-item">Unassign {{ person.name }}</span>
+        <user-minus-icon class="flexrow-item" :size="16" />
+        <span class="flexrow-item">
+          {{ $t('main.avatar.unassign', { personName: person.name }) }}
+        </span>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { UserIcon, UserMinusIcon } from 'vue-feather-icons'
+import { UserIcon, UserMinusIcon } from 'lucide-vue'
+import { mapGetters } from 'vuex'
 
 export default {
-  name: 'person-avatar',
+  name: 'people-avatar-with-menu',
 
   components: {
     UserIcon,
     UserMinusIcon
-  },
-
-  data() {
-    return {
-      avatarPath: '',
-      avatarKey: '',
-      initials: ''
-    }
   },
 
   props: {
@@ -69,65 +55,54 @@ export default {
         color: '#FFF'
       })
     },
-    size: { type: Number, default: 40 },
-    'font-size': { type: Number, default: 18 },
-    'is-link': { type: Boolean, default: true },
-    'no-cache': { type: Boolean, default: false },
-    isMenu: { type: Boolean, default: false }
-  },
-
-  created() {
-    this.reloadAvatar()
-  },
-
-  methods: {
-    reloadAvatar() {
-      this.avatarPath =
-        this.person.avatarPath + '?unique=' + this.person.uniqueHash
-      this.avatarKey = this.person.id + '-' + this.person.uniqueHash
+    size: {
+      type: Number,
+      default: 40
+    },
+    fontSize: {
+      type: Number,
+      default: 18
+    },
+    isLazy: {
+      type: Boolean,
+      default: true
     }
   },
 
-  mounted() {
-    this.initials = this.person.initials
-  },
+  computed: {
+    ...mapGetters(['isDarkTheme']),
 
-  watch: {
-    person() {
-      this.reloadAvatar()
-    },
-
-    'person.uniqueHash'() {
-      this.reloadAvatar()
+    style() {
+      return {
+        color: this.isDarkTheme ? '#333' : '#FFF',
+        'font-weight': this.isDarkTheme ? 'bold' : 'normal',
+        width: `${this.size}px`,
+        height: `${this.size}px`,
+        fontSize: `${this.fontSize}px`,
+        backgroundColor: this.person.color
+      }
     }
   }
 }
 </script>
 
 <style lang="scss" scoped>
-.avatar img {
-  max-height: 100%;
-  height: 100%;
-  width: 100%;
-}
-
 .avatar {
   position: relative;
-  border-radius: 50%;
-  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-}
 
-.avatar span {
-  flex: 1;
-}
+  a {
+    padding: 0;
+    margin: 0;
+  }
 
-.avatar a {
-  padding: 0;
-  margin: 0;
-  color: white;
+  img {
+    max-height: 100%;
+    height: 100%;
+    width: 100%;
+  }
 }
 
 .flexrow-item {

@@ -1,17 +1,11 @@
 export const previewRoomMixin = {
-  created() {},
-
-  mounted() {},
-
-  beforeDestroy() {},
-
   computed: {
     room() {
       return this.previewRoom().room
     },
 
     joinedRoom() {
-      return this.previewRoom().joinedRoom
+      return this.previewRoom() && this.previewRoom().joinedRoom
     }
   },
 
@@ -31,6 +25,7 @@ export const previewRoomMixin = {
 
     joinRoom() {
       if (!this.previewRoom()) return
+      if (this.isFullMode) this.isFullMode = false
 
       this.$socket.emit('preview-room:join', {
         user_id: this.user.id,
@@ -56,7 +51,7 @@ export const previewRoomMixin = {
 
     leaveRoom() {
       if (!this.previewRoom()) return
-
+      if (!this.user) return
       this.$socket.emit('preview-room:leave', {
         user_id: this.user.id,
         playlist_id: this.previewRoom().roomId

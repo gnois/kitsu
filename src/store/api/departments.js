@@ -1,22 +1,29 @@
 import client from '@/store/api/client'
 
 export default {
-  getDepartments(callback) {
-    client.get('/api/data/departments', callback)
+  getDepartments() {
+    return client.pget('/api/data/departments')
   },
 
-  newDepartement(newDepartement) {
-    return client.ppost('/api/data/departments', newDepartement)
+  newDepartment(department) {
+    const data = {
+      name: department.name,
+      color: department.color,
+      archived: department.archived === 'true'
+    }
+    return client.ppost('/api/data/departments', data)
   },
 
-  editDepartement(editedDepartement) {
-    return client.pput(
-      `/api/data/departments/${editedDepartement.id}`,
-      editedDepartement
-    )
+  editDepartment(department) {
+    const data = {
+      name: department.name,
+      color: department.color,
+      archived: department.archived === 'true'
+    }
+    return client.pput(`/api/data/departments/${department.id}`, data)
   },
 
-  deleteDepartment(departementToDelete) {
-    return client.pdel(`/api/data/departments/${departementToDelete.id}`)
+  deleteDepartment(department) {
+    return client.pdel(`/api/data/departments/${department.id}`)
   }
 }

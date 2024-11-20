@@ -11,11 +11,11 @@
             <th class="type">
               {{ $t('entities.preview_files.task_type') }}
             </th>
-            <th class="revision">
-              {{ $t('entities.preview_files.revision') }}
-            </th>
             <th class="original-name">
               {{ $t('entities.preview_files.original_file_name') }}
+            </th>
+            <th class="revision">
+              {{ $t('entities.preview_files.revision') }}
             </th>
             <th class="extension">
               {{ $t('entities.preview_files.extension') }}
@@ -26,15 +26,12 @@
             <th class="status">
               {{ $t('entities.preview_files.status') }}
             </th>
-            <th class="uploader">
+            <th class="person">
               {{ $t('entities.preview_files.uploader') }}
             </th>
-            <th class="person"></th>
             <th class="end-cell"></th>
           </tr>
         </thead>
-      </table>
-      <table class="datatable" style="overflow: auto">
         <tbody class="datatable-body">
           <tr
             :key="previewFile.id"
@@ -50,16 +47,16 @@
               />
             </td>
 
-            <task-type-name
+            <task-type-cell
               class="type"
               :task-type="getTaskType(previewFile)"
               :production-id="currentProduction.id"
             />
-            <td class="revision">
-              {{ previewFile.revision }}
-            </td>
             <td class="original-name">
               {{ previewFile.original_name }}
+            </td>
+            <td class="revision">
+              {{ previewFile.revision }}
             </td>
             <td class="extension">
               {{ previewFile.extension }}
@@ -70,11 +67,11 @@
             <td class="status">
               {{ previewFile.validation_status }}
             </td>
-
             <people-name-cell
               class="person"
               :person="personMap.get(previewFile.person_id)"
             />
+
             <td class="download">
               <a
                 class="button flexrow-item"
@@ -96,23 +93,25 @@
 </template>
 
 <script>
+import { DownloadIcon } from 'lucide-vue'
 import { mapGetters, mapActions } from 'vuex'
 
-import { DownloadIcon } from 'vue-feather-icons'
 import { renderFileSize } from '@/lib/render'
-import EntityThumbnail from '@/components/widgets/EntityThumbnail'
-import PeopleNameCell from '@/components/cells/PeopleNameCell'
-import Spinner from '@/components/widgets/Spinner'
-import TaskTypeName from '@/components/cells/TaskTypeName'
+
+import EntityThumbnail from '@/components/widgets/EntityThumbnail.vue'
+import PeopleNameCell from '@/components/cells/PeopleNameCell.vue'
+import Spinner from '@/components/widgets/Spinner.vue'
+import TaskTypeCell from '@/components/cells/TaskTypeCell.vue'
 
 export default {
   name: 'entity-preview-files',
+
   components: {
     DownloadIcon,
     EntityThumbnail,
     PeopleNameCell,
     Spinner,
-    TaskTypeName
+    TaskTypeCell
   },
 
   data() {
@@ -189,18 +188,24 @@ export default {
   overflow-y: auto;
 }
 
-.thumbnail {
+table.datatable {
+  table-layout: fixed;
+}
+
+th.thumbnail {
   padding-top: 10px;
   width: 80px;
 }
-.type {
-  width: 150px;
+
+td.thumbnail {
+  width: 80px;
+}
+
+td.type {
+  width: 100px;
 }
 .revision {
   width: 80px;
-}
-.original-name {
-  width: 300px;
 }
 .extension {
   width: 80px;
@@ -213,6 +218,13 @@ export default {
 }
 .download {
   width: 40px;
+}
+
+.original-name {
+  width: 250px;
+}
+.person {
+  width: 250px;
 }
 
 .preview-files {

@@ -62,7 +62,9 @@ import {
   CLEAR_SELECTED_TASKS,
   SET_PREVIEW,
   SAVE_SHOT_SEARCH_END,
+  SAVE_SHOT_SEARCH_FILTER_GROUP_END,
   REMOVE_SHOT_SEARCH_END,
+  REMOVE_SHOT_SEARCH_FILTER_GROUP_END,
   CHANGE_SHOT_SORT,
   UPDATE_METADATA_DESCRIPTOR_END,
   LOCK_SHOT,
@@ -228,7 +230,11 @@ const helpers = {
     result = sortShotResult(result, sorting, taskTypeMap, taskMap)
     cache.result = result
 
-    const displayedShots = result.slice(0, PAGE_SIZE)
+    const limit =
+      state.displayedShots.length > PAGE_SIZE
+        ? state.displayedShots.length
+        : PAGE_SIZE
+    const displayedShots = result.slice(0, limit)
     const maxX = displayedShots.length
     const maxY = state.nbValidationColumns
 
@@ -246,6 +252,7 @@ const initialState = {
   shotMap: new Map(),
   shotSearchText: '',
   shotSearchQueries: [],
+  shotSearchFilterGroups: [],
   shotSorting: [],
 
   isFps: false,
@@ -285,9 +292,11 @@ const state = {
 }
 
 const getters = {
+  shots: state => cache.shots,
   shotValidationColumns: state => state.shotValidationColumns,
 
   shotSearchQueries: state => state.shotSearchQueries,
+  shotSearchFilterGroups: state => state.shotSearchFilterGroups,
   shotMap: state => state.shotMap,
   shotSorting: state => state.shotSorting,
 
@@ -376,8 +385,8 @@ const actions = {
     const production = rootGetters.currentProduction
     const episodes = rootGetters.episodes
     const userFilters = rootGetters.userFilters
+    const userFilterGroups = rootGetters.userFilterGroups
     const taskTypeMap = rootGetters.taskTypeMap
-    const taskMap = rootGetters.taskMap
     const episodeMap = rootGetters.episodeMap
     const personMap = rootGetters.personMap
     const isTVShow = rootGetters.isTVShow
@@ -415,10 +424,12 @@ const actions = {
       })
       .then(shots => {
         const sequenceMap = rootGetters.sequenceMap
+        const taskMap = rootGetters.taskMap
         commit(LOAD_SHOTS_END, {
           production,
           shots,
           userFilters,
+          userFilterGroups,
           taskTypeMap,
           taskMap,
           personMap,
@@ -570,28 +581,53 @@ const actions = {
   },
 
   saveShotSearch({ commit, rootGetters }, searchQuery) {
-    const query = state.shotSearchQueries.find(
-      query => query.name === searchQuery
-    )
-    const production = rootGetters.currentProduction
-
-    if (!query) {
-      return peopleApi
-        .createFilter('shot', searchQuery, searchQuery, production.id, null)
-        .then(searchQuery => {
-          commit(SAVE_SHOT_SEARCH_END, { searchQuery, production })
-          return Promise.resolve(searchQuery)
-        })
-    } else {
-      return Promise.resolve()
+    if (state.shotSearchQueries.some(query => query.name === searchQuery)) {
+      return
     }
+    const production = rootGetters.currentProduction
+    return peopleApi
+      .createFilter('shot', searchQuery, searchQuery, production.id, null)
+      .then(searchQuery => {
+        commit(SAVE_SHOT_SEARCH_END, { searchQuery, production })
+        return searchQuery
+      })
+  },
+
+  saveShotSearchFilterGroup({ commit, state, rootGetters }, filterGroup) {
+    const groupExist = state.shotSearchFilterGroups.some(
+      query => query.name === filterGroup.name
+    )
+    if (groupExist) {
+      return
+    }
+
+    const production = rootGetters.currentProduction
+    return peopleApi
+      .createFilterGroup(
+        'shot',
+        filterGroup.name,
+        filterGroup.color,
+        production.id,
+        filterGroup.is_shared,
+        filterGroup.department_id
+      )
+      .then(filterGroup => {
+        commit(SAVE_SHOT_SEARCH_FILTER_GROUP_END, { filterGroup, production })
+        return filterGroup
+      })
   },
 
   removeShotSearch({ commit, rootGetters }, searchQuery) {
     const production = rootGetters.currentProduction
     return peopleApi.removeFilter(searchQuery).then(() => {
       commit(REMOVE_SHOT_SEARCH_END, { searchQuery, production })
-      return Promise.resolve()
+    })
+  },
+
+  removeShotSearchFilterGroup({ commit, rootGetters }, filterGroup) {
+    const production = rootGetters.currentProduction
+    return peopleApi.removeFilterGroup(filterGroup).then(() => {
+      commit(REMOVE_SHOT_SEARCH_FILTER_GROUP_END, { filterGroup, production })
     })
   },
 
@@ -729,6 +765,21 @@ const actions = {
         }
       )
     })
+  },
+
+  async setNbFramesFromTaskTypePreviews(
+    { commit, rootGetters },
+    { taskTypeId, productionId, episodeId }
+  ) {
+    const shotNbFrames = await shotsApi.setNbFramesFromTaskTypePreviews(
+      taskTypeId,
+      productionId,
+      episodeId
+    )
+    shotNbFrames.forEach(shot => {
+      commit(UPDATE_SHOT, shot)
+    })
+    return shotNbFrames
   }
 }
 
@@ -746,6 +797,7 @@ const mutations = {
     state.displayedEstimation = 0
     state.displayedFrames = 0
     state.shotSearchQueries = []
+    state.shotSearchFilterGroups = []
     state.displayedSequences = []
     state.displayedSequencesLength = 0
 
@@ -768,6 +820,7 @@ const mutations = {
     state.displayedEstimation = 0
     state.displayedFrames = 0
     state.shotSearchQueries = []
+    state.shotSearchFilterGroups = []
     state.displayedSequences = []
     state.displayedSequencesLength = 0
 
@@ -785,6 +838,7 @@ const mutations = {
       production,
       shots,
       userFilters,
+      userFilterGroups,
       taskMap,
       taskTypeMap,
       personMap,
@@ -810,8 +864,8 @@ const mutations = {
       let estimation = 0
       const sequence = sequenceMap.get(shot.sequence_id)
       const episode = episodeMap.get(shot.episode_id)
-      shot.sequence_name = sequence.name
-      shot.episode_name = episode ? episode.name : ''
+      shot.sequence_name = sequence?.name || ''
+      shot.episode_name = episode?.name || ''
       shot.project_name = production.name
       shot.production_id = production.id
       shot.full_name = helpers.getShotName(shot)
@@ -888,16 +942,20 @@ const mutations = {
     state.shotSelectionGrid = buildSelectionGrid(maxX, maxY)
     helpers.setListStats(state, shots)
 
-    if (userFilters.shot && userFilters.shot[production.id]) {
-      state.shotSearchQueries = userFilters.shot[production.id]
-    } else {
-      state.shotSearchQueries = []
-    }
+    state.shotSearchQueries = userFilters.shot?.[production.id] || []
+    state.shotSearchFilterGroups = userFilterGroups?.shot?.[production.id] || []
   },
 
   [SAVE_SHOT_SEARCH_END](state, { searchQuery }) {
     state.shotSearchQueries.push(searchQuery)
     state.shotSearchQueries = sortByName(state.shotSearchQueries)
+  },
+
+  [SAVE_SHOT_SEARCH_FILTER_GROUP_END](state, { filterGroup }) {
+    if (!state.shotSearchFilterGroups.includes(filterGroup)) {
+      state.shotSearchFilterGroups.push(filterGroup)
+      state.shotSearchFilterGroups = sortByName(state.shotSearchFilterGroups)
+    }
   },
 
   [REMOVE_SHOT_SEARCH_END](state, { searchQuery }) {
@@ -906,6 +964,15 @@ const mutations = {
     )
     if (queryIndex >= 0) {
       state.shotSearchQueries.splice(queryIndex, 1)
+    }
+  },
+
+  [REMOVE_SHOT_SEARCH_FILTER_GROUP_END](state, { filterGroup }) {
+    const groupIndex = state.shotSearchFilterGroups.findIndex(
+      query => query.name === filterGroup.name
+    )
+    if (groupIndex >= 0) {
+      state.shotSearchFilterGroups.splice(groupIndex, 1)
     }
   },
 
@@ -1079,6 +1146,17 @@ const mutations = {
   },
 
   [REMOVE_SELECTED_TASK](state, validationInfo) {
+    if (
+      !validationInfo.x &&
+      validationInfo.task?.column &&
+      state.shotMap.get(validationInfo.task.entity.id)
+    ) {
+      const entity = validationInfo.task.entity
+      const taskType = validationInfo.task.column
+      const list = state.displayedShots.flat()
+      validationInfo.x = list.findIndex(e => e.id === entity.id)
+      validationInfo.y = state.shotValidationColumns.indexOf(taskType.id)
+    }
     if (
       state.shotSelectionGrid[0] &&
       state.shotSelectionGrid[validationInfo.x]

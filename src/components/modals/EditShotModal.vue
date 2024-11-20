@@ -9,14 +9,14 @@
 
     <div class="modal-content">
       <div class="box">
-        <h1 class="title" v-if="shotToEdit && this.shotToEdit.id">
+        <h1 class="title" v-if="shotToEdit && shotToEdit.id">
           {{ $t('shots.edit_title') }} {{ shotToEdit.name }}
         </h1>
         <h1 class="title" v-else>
           {{ $t('shots.new_shot') }}
         </h1>
 
-        <form v-on:submit.prevent>
+        <form @submit.prevent>
           <combobox
             :label="$t('shots.fields.sequence')"
             :options="sequenceOptions"
@@ -25,7 +25,7 @@
           <text-field
             ref="nameField"
             :label="$t('shots.fields.name')"
-            v-model="form.name"
+            v-model.trim="form.name"
             @enter="runConfirmation"
             v-focus
           />
@@ -42,7 +42,6 @@
             type="number"
             v-model="form.nb_frames"
             @enter="runConfirmation"
-            v-focus
           />
           <text-field
             ref="frameInField"
@@ -108,14 +107,15 @@ import { mapGetters, mapActions } from 'vuex'
 import { modalMixin } from '@/components/modals/base_modal'
 import { formatListMixin } from '@/components/mixins/format'
 
-import Combobox from '@/components/widgets/Combobox'
-import MetadataField from '@/components/widgets/MetadataField'
-import ModalFooter from '@/components/modals/ModalFooter'
-import TextField from '@/components/widgets/TextField'
-import TextareaField from '@/components/widgets/TextareaField'
+import Combobox from '@/components/widgets/Combobox.vue'
+import MetadataField from '@/components/widgets/MetadataField.vue'
+import ModalFooter from '@/components/modals/ModalFooter.vue'
+import TextField from '@/components/widgets/TextField.vue'
+import TextareaField from '@/components/widgets/TextareaField.vue'
 
 export default {
   name: 'edit-shot-modal',
+
   mixins: [formatListMixin, modalMixin],
 
   components: {

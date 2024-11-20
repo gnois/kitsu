@@ -10,7 +10,7 @@
     <div class="modal-content">
       <div class="box">
         <p class="text">{{ text }}</p>
-        <p class="is-danger" v-if="isError">{{ errorText }}</p>
+        <p class="is-danger has-text-right" v-if="isError">{{ errorText }}</p>
         <p class="has-text-right">
           <a
             :class="{
@@ -32,12 +32,13 @@
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
 import { modalMixin } from '@/components/modals/base_modal'
 
 export default {
   name: 'delete-modal',
+
   mixins: [modalMixin],
+
   props: {
     text: {
       required: true,
@@ -63,12 +64,6 @@ export default {
       default: '',
       type: String
     }
-  },
-  computed: {
-    ...mapGetters([])
-  },
-  methods: {
-    ...mapActions([])
   }
 }
 </script>
@@ -79,11 +74,5 @@ export default {
 }
 .modal-content .box p.text {
   margin-bottom: 1em;
-}
-
-p.is-danger {
-  color: #ff3860;
-  font-style: italic;
-  margin-bottom: 2em;
 }
 </style>

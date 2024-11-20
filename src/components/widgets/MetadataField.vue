@@ -8,8 +8,8 @@
     :key="`${descriptor.id}-checklist-wrapper`"
   >
     <label class="label" :key="`${descriptor.id}-${descriptor.name}`">
-      {{ descriptor.name }}</label
-    >
+      {{ descriptor.name }}
+    </label>
     <div
       class="checkbox-wrapper"
       v-for="(option, i) in descriptorChecklistValues"
@@ -37,7 +37,7 @@
   <!-- list field -->
   <combobox
     v-else-if="descriptor.data_type === 'list'"
-    :label="descriptor.name"
+    :label="label ?? descriptor.name"
     :options="getDescriptorChoicesOptions(descriptor)"
     :value="value"
     @enter="onEnter"
@@ -45,7 +45,7 @@
   />
   <!-- boolean field -->
   <combobox-boolean
-    :label="descriptor.name"
+    :label="label ?? descriptor.name"
     :value="value === 'true' ? value : 'false'"
     @enter="onEnter"
     @input="updateValue"
@@ -53,7 +53,7 @@
   />
   <!-- tag list field -->
   <combobox-tag
-    :label="descriptor.name"
+    :label="label ?? descriptor.name"
     :options="getDescriptorChoicesOptions(descriptor, false)"
     :value="value"
     @enter="onEnter"
@@ -62,7 +62,7 @@
   />
   <!-- number or text field-->
   <text-field
-    :label="descriptor.name"
+    :label="label ?? descriptor.name"
     :type="descriptor.data_type"
     :value="value"
     :min="null"
@@ -74,17 +74,18 @@
 
 <script>
 import { mapGetters } from 'vuex'
-import { descriptorMixin } from '@/components/mixins/descriptors'
-import { entityListMixin } from '@/components/mixins/entity_list'
 
-import Combobox from '@/components/widgets/Combobox'
-import ComboboxBoolean from '@/components/widgets/ComboboxBoolean'
-import ComboboxTag from '@/components/widgets/ComboboxTag'
-import TextField from '@/components/widgets/TextField'
+import { descriptorMixin } from '@/components/mixins/descriptors'
+
+import Combobox from '@/components/widgets/Combobox.vue'
+import ComboboxBoolean from '@/components/widgets/ComboboxBoolean.vue'
+import ComboboxTag from '@/components/widgets/ComboboxTag.vue'
+import TextField from '@/components/widgets/TextField.vue'
 
 export default {
-  name: 'MetadataField',
-  mixins: [entityListMixin, descriptorMixin],
+  name: 'metadata-field',
+
+  mixins: [descriptorMixin],
 
   components: {
     Combobox,
@@ -94,16 +95,19 @@ export default {
   },
 
   props: {
-    entity: {
-      type: Object,
-      required: true
-    },
     descriptor: {
       type: Object,
       required: true
     },
+    entity: {
+      type: Object,
+      required: true
+    },
+    label: {
+      type: String
+    },
     value: {
-      type: [Number, String],
+      type: [Number, String, Object],
       default: ''
     }
   },

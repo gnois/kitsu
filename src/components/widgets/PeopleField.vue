@@ -1,39 +1,63 @@
 <template>
-  <v-autocomplete
-    ref="autocomplete"
-    :auto-select-one-item="false"
-    :component-item="assignationItem"
-    :get-label="getAssignationLabel"
-    :items="items"
-    :input-attrs="{
-      placeholder: placeholder || this.$t('people.select_person'),
-      class: wide
-        ? 'big wide v-autocomplete-input'
-        : big
-        ? 'big v-autocomplete-input'
-        : 'v-autocomplete-input'
-    }"
-    :min-len="1"
-    @update-items="update"
-    @input="onChange"
-    v-model="item"
-  />
+  <div class="people-field">
+    <v-autocomplete
+      ref="autocomplete"
+      :auto-select-one-item="false"
+      :component-item="assignationItem"
+      :get-label="getAssignationLabel"
+      :items="items"
+      :input-attrs="{
+        placeholder: placeholder || $t('people.select_person'),
+        class: wide
+          ? 'big wide v-autocomplete-input'
+          : big
+            ? 'big v-autocomplete-input'
+            : 'v-autocomplete-input'
+      }"
+      :keep-open="keepOpen"
+      :min-len="0"
+      :wait="100"
+      @focus="keepOpen = true"
+      @input="onChange"
+      @item-clicked="keepOpen = false"
+      @keyup.enter.native="onEnter"
+      @update-items="update"
+      v-model="item"
+    />
+    <span class="clear-button" @click="item = null" v-show="item != null">
+      <x-icon :size="12" />
+    </span>
+
+    <div
+      @click="keepOpen = false"
+      :class="{
+        'c-mask': true,
+        'is-active': keepOpen
+      }"
+    ></div>
+  </div>
 </template>
 
 <script>
-import AssignationItem from '@/components/widgets/AssignationItem'
-import { mapGetters } from 'vuex'
+import { XIcon } from 'lucide-vue'
+
 import { buildNameIndex, indexSearch } from '@/lib/indexing'
+
+import AssignationItem from '@/components/widgets/AssignationItem.vue'
 
 export default {
   name: 'people-field',
 
+  components: {
+    XIcon
+  },
+
   data() {
     return {
       assignationItem: AssignationItem,
+      item: null,
       items: [],
-      item: {},
-      searchText: ''
+      keepOpen: false
     }
   },
 
@@ -45,69 +69,52 @@ export default {
 
   mounted() {
     this.items = this.people
-    this.$refs.autocomplete.$el.children[0].children[0].addEventListener(
-      'keyup',
-      event => {
-        if (event.keyCode === 13 && this.item) {
-          this.$emit('enter')
-        }
-
-        this.searchText =
-          this.$refs.autocomplete.$el.children[0].children[0].value
-        if (!this.item && this.searchText.length === 0) {
-          this.items = []
-        }
-      }
-    )
   },
 
   props: {
-    value: {
-      type: Object,
-      default: () => {}
+    big: {
+      type: Boolean,
+      default: false
     },
     people: {
       type: Array,
       default: () => []
     },
-    big: {
-      type: Boolean,
-      default: false
+    placeholder: {
+      type: String,
+      default: ''
+    },
+    value: {
+      type: Object,
+      default: () => {}
     },
     wide: {
       type: Boolean,
       default: false
-    },
-    placeholder: {
-      type: String,
-      default: ''
     }
-  },
-
-  computed: {
-    ...mapGetters(['peopleIndex'])
   },
 
   methods: {
     getAssignationLabel(item) {
-      if (item) {
-        return item.name
-      } else {
-        return ''
-      }
+      return item?.name || ''
     },
 
     update(searchText) {
-      if (searchText && searchText.length > 0) {
-        const result = indexSearch(this.index, [searchText])
-        this.items = result
-      } else {
-        this.items = this.people
-      }
+      this.keepOpen = true
+      this.items = searchText?.length
+        ? indexSearch(this.index, [searchText])
+        : this.people
     },
 
     onChange() {
       this.$emit('input', this.item)
+    },
+
+    onEnter() {
+      if (this.item) {
+        this.$emit('enter')
+        this.$refs.autocomplete.focus()
+      }
     },
 
     clear() {
@@ -115,20 +122,15 @@ export default {
     },
 
     focus() {
-      const inputEl = this.$el.querySelector('.v-autocomplete-input')
-      if (inputEl) inputEl.focus()
+      this.$el.querySelector('.v-autocomplete-input')?.focus()
     }
   },
 
   watch: {
-    item() {
-      if (!this.item) {
-        this.items = this.people
-      }
-    },
-
     people() {
-      this.items = null
+      this.item = this.item
+        ? this.people.find(person => person.id === this.item.id)
+        : null
       this.items = this.people
       this.index = buildNameIndex(this.people)
     }
@@ -142,26 +144,46 @@ export default {
   border-color: $dark-grey;
   color: $white-grey;
 
-  &:active {
-    border: 1px solid $green;
-  }
-
+  &:active,
   &:hover {
     border: 1px solid $green;
   }
-}
 
-.dark .v-autocomplete .v-autocomplete-input-group .v-autocomplete-input:focus {
-  border-color: $green;
+  &:focus {
+    border-color: $green;
+  }
 }
 
 .dark .v-autocomplete .v-autocomplete-list {
-  box-shadow: 2px 2px 2px 0px $dark-grey-light;
+  box-shadow: 2px 2px 2px 0 $dark-grey-light;
   border-color: $dark-grey;
 }
 
+.people-field {
+  position: relative;
+
+  .clear-button {
+    color: var(--text);
+    cursor: pointer;
+    position: absolute;
+    right: 4px;
+    top: 0;
+    z-index: 206; // +1 relative to the z-index of .v-autocomplete
+  }
+}
+
+.v-autocomplete {
+  z-index: 205; // +1 relative to the z-index of c-mask
+  position: relative;
+
+  // Hide native clear button for Webkit browsers (Chrome, Safari)
+  input[type='search']::-webkit-search-cancel-button {
+    display: none;
+  }
+}
+
 .v-autocomplete .v-autocomplete-list {
-  box-shadow: 0px 0px 2px 0px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 2px 0 rgba(0, 0, 0, 0.2);
   left: 6px;
   top: 41px;
   width: calc(100% - 13px);
@@ -204,12 +226,7 @@ export default {
   border-radius: 10px;
   padding: 0.5em;
 
-  &:active {
-    border: 1px solid $green;
-    border-left-bottom-radius: 0px;
-    border-right-bottom-radius: 0px;
-  }
-
+  &:active,
   &:hover {
     border: 1px solid $green;
   }

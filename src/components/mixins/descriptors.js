@@ -5,14 +5,15 @@
 import { mapGetters } from 'vuex'
 
 export const descriptorMixin = {
-  created() {},
-
-  mounted() {},
-
-  beforeDestroy() {},
-
   computed: {
-    ...mapGetters(['selectedAssets', 'selectedShots', 'selectedEdits']),
+    ...mapGetters([
+      'isCurrentUserSupervisor',
+      'selectedAssets',
+      'selectedShots',
+      'selectedEdits',
+      'user'
+    ]),
+
     descriptorLength() {
       if (this.shotMetadataDescriptors.length !== undefined) {
         return this.shotMetadataDescriptors.length
@@ -100,7 +101,8 @@ export const descriptorMixin = {
       this.$emit('change-sort', {
         type: 'metadata',
         column: column.field_name,
-        name: column.name
+        name: column.name,
+        data_type: column.data_type
       })
       this.showMetadataHeaderMenu()
     },
@@ -188,6 +190,19 @@ export const descriptorMixin = {
         }
       })
       return values
+    },
+
+    isSupervisorInDepartments(departments = []) {
+      if (!Array.isArray(departments)) {
+        departments = [departments]
+      }
+      return (
+        this.isCurrentUserSupervisor &&
+        (this.user.departments.length === 0 ||
+          this.user.departments.some(department =>
+            departments.includes(department)
+          ))
+      )
     },
 
     /*

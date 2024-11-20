@@ -1,6 +1,7 @@
 import Vue from 'vue/dist/vue'
 
 import colors from '@/lib/colors'
+import stringHelpers from '@/lib/string'
 
 import assetStore from '@/store/modules/assets'
 import editStore from '@/store/modules/edits'
@@ -189,7 +190,7 @@ export const entityListMixin = {
           let startY = this.lastSelection.y
           if (!sticked) startY += columnOffset
           let endY = validationInfo.y
-          const grid = this[this.type + 'SelectionGrid']
+          const grid = this[`${this.type}SelectionGrid`]
           if (validationInfo.x < this.lastSelection.x) {
             startX = validationInfo.x
             endX = this.lastSelection.x
@@ -202,7 +203,7 @@ export const entityListMixin = {
 
           for (let i = startX; i <= endX; i++) {
             for (let j = startY; j <= endY; j++) {
-              const ref = 'validation-' + i + '-' + j
+              const ref = `validation-${i}-${j}`
               const validationCell = this.$refs[ref][0]
               if (!grid[i][j]) {
                 let y = validationCell.columnY
@@ -222,14 +223,18 @@ export const entityListMixin = {
             }
           }
           this.$store.commit('ADD_SELECTED_TASK', validationInfo)
+          this.updateTaskInQuery()
         }
       } else if (!validationInfo.isCtrlKey) {
         this.$store.commit('CLEAR_SELECTED_TASKS')
+        this.updateTaskInQuery()
       }
       if (selection.length === 0) {
         this.$store.commit('ADD_SELECTED_TASK', validationInfo)
+        this.updateTaskInQuery()
       } else {
         this.$store.commit('ADD_SELECTED_TASKS', selection)
+        this.updateTaskInQuery()
       }
 
       if (!validationInfo.isShiftKey && validationInfo.isUserClick) {
@@ -237,7 +242,7 @@ export const entityListMixin = {
         let y = validationInfo.y
         if (!sticked) y -= columnOffset
         this.lastSelection = { x, y }
-        const ref = 'validation-' + x + '-' + y
+        const ref = `validation-${x}-${y}`
         const validationCell = this.$refs[ref][0]
         this.$nextTick(() => {
           this.scrollToValidationCell(validationCell)
@@ -264,6 +269,7 @@ export const entityListMixin = {
       } else {
         this.$store.commit('REMOVE_SELECTED_TASK', validationInfo)
       }
+      this.updateTaskInQuery()
     },
 
     showHeaderMenu(columnId, columnIndexInGrid, event) {
@@ -280,9 +286,9 @@ export const entityListMixin = {
         const left = headerBox.left
         const top = headerBox.bottom
         const width = Math.max(100, headerBox.width - 1)
-        headerMenuEl.style.left = left + 'px'
-        headerMenuEl.style.top = top + 'px'
-        headerMenuEl.style.width = width + 'px'
+        headerMenuEl.style.left = `${left}px`
+        headerMenuEl.style.top = `${top}px`
+        headerMenuEl.style.width = `${width}px`
       }
       this.lastHeaderMenuDisplayed = columnId
       this.lastHeaderMenuDisplayedIndexInGrid = columnIndexInGrid
@@ -335,7 +341,7 @@ export const entityListMixin = {
 
       entities.forEach((entity, i) => {
         selection.push({
-          entity: entity,
+          entity,
           column: this.taskTypeMap.get(taskTypeId),
           task: this.taskMap.get(entity.validations.get(taskTypeId)),
           x: i,
@@ -346,6 +352,7 @@ export const entityListMixin = {
       this.$store.commit('CLEAR_SELECTED_TASKS')
       this.$nextTick(() => {
         this.$store.commit('ADD_SELECTED_TASKS', selection)
+        this.updateTaskInQuery()
         this.showHeaderMenu()
       })
     },
@@ -437,19 +444,6 @@ export const entityListMixin = {
       return false
     },
 
-    isSupervisorInDepartments(departments = []) {
-      if (!Array.isArray(departments)) {
-        departments = [departments]
-      }
-      return (
-        this.isCurrentUserSupervisor &&
-        (this.user.departments.length === 0 ||
-          this.user.departments.some(department =>
-            departments.includes(department)
-          ))
-      )
-    },
-
     isValidResolution(shot) {
       if (!shot) return true
       const res = this.getMetadataFieldValue({ field_name: 'resolution' }, shot)
@@ -478,6 +472,66 @@ export const entityListMixin = {
     metadataStickColumnClicked(event) {
       this.toggleStickedColumns(this.lastMetadaDataHeaderMenuDisplayed)
       this.showMetadataHeaderMenu(this.lastMetadaDataHeaderMenuDisplayed, event)
+    },
+
+    /*
+     * Update the url query string with the currently selected task id.
+     * (set a task_id field in the query string)
+     * If 0 or more than 1 task is selected, remove the task_id field.
+     */
+    updateTaskInQuery() {
+      if (this.nbSelectedTasks === 1) {
+        const selectedTaskIds = Array.from(this.selectedTasks.keys())
+        const taskId = selectedTaskIds[0]
+        this.$router.push({
+          query: {
+            ...this.$route.query,
+            task_id: taskId
+          }
+        })
+      } else {
+        this.$router.push({
+          query: {
+            ...this.$route.query,
+            task_id: undefined
+          }
+        })
+      }
+    },
+
+    /*
+     * Select the task listed in the url query string (task_id field) if
+     * present.
+     */
+    selectTaskFromQuery() {
+      const taskId = this.$route.query.task_id
+      const task = this.taskMap.get(taskId)
+      if (task) {
+        const entityMap = this[`${this.type}Map`]
+        const entity = entityMap.get(task.entity_id)
+        const taskType = this.taskTypeMap.get(task.task_type_id)
+
+        let list = this[`displayed${stringHelpers.capitalize(this.type)}s`]
+        if (['asset', 'shot'].includes(this.type)) {
+          list = list.flat()
+        }
+        const x = list.findIndex(e => e.id === entity.id)
+        const y = this.validationColumns.indexOf(task.task_type_id)
+
+        this.$store.commit('ADD_SELECTED_TASK', {
+          task,
+          entity,
+          column: taskType,
+          x,
+          y
+        })
+      }
+    }
+  },
+
+  watch: {
+    nbSelectedTasks() {
+      this.updateTaskInQuery()
     }
   }
 }

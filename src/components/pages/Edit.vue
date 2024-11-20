@@ -40,11 +40,11 @@
         <div class="flexrow-item block mt0">
           <preview-room
             :ref="previewRoomRef"
-            :roomId="
+            :room-id="
               currentEdit && isValidRoomId(currentEdit.id) ? currentEdit.id : ''
             "
-            :joinRoom="joinRoom"
-            :leaveRoom="leaveRoom"
+            :join-room="joinRoom"
+            :leave-room="leaveRoom"
             v-if="
               currentEdit &&
               isValidRoomId(currentEdit.id) &&
@@ -72,9 +72,10 @@
               :current-preview-index="currentPreviewIndex"
               :muted="isMuted"
               @max-duration-update="onMaxDurationUpdate"
+              @frame-update="onFrameUpdate"
               @metadata-loaded="onMetadataLoaded"
               @repeat="onVideoRepeated"
-              @frame-update="onFrameUpdate"
+              @video-loaded="onVideoLoaded"
               v-show="isCurrentPreviewMovie && !isLoading"
             />
 
@@ -157,17 +158,14 @@
           </div>
           <task-info
             ref="task-info"
-            :class="{
-              'flexrow-item': true,
-              'task-info-column': true,
-              hidden: isCommentsHidden
-            }"
+            class="flexrow-item task-info-column"
             :task="task"
             :is-preview="false"
             :silent="isCommentsHidden"
             :current-time-raw="currentTimeRaw - frameDuration"
             :current-parent-preview="currentPreview"
             @time-code-clicked="onTimeCodeClicked"
+            v-show="!isCommentsHidden"
           />
         </div>
 
@@ -176,9 +174,11 @@
           class="video-progress pull-bottom"
           :annotations="annotations"
           :frame-duration="frameDuration"
+          :movie-dimensions="movieDimensions"
           :nb-frames="nbFrames"
           :handle-in="-1"
           :handle-out="-1"
+          :preview-id="currentPreview ? currentPreview.id : ''"
           @start-scrub="onScrubStart"
           @end-scrub="onScrubEnd"
           @progress-changed="onProgressChanged"
@@ -257,7 +257,7 @@
               :title="$t('playlists.actions.see_original_file')"
               target="blank"
             >
-              <arrow-up-right-icon class="icon is-small" />
+              <arrow-up-right-icon class="icon" />
             </a>
           </div>
 
@@ -365,8 +365,8 @@
             <transition name="slide">
               <div class="annotation-tools" v-show="isTyping">
                 <color-picker
-                  :isOpen="isShowingPalette"
-                  :color="this.textColor"
+                  :is-open="isShowingPalette"
+                  :color="textColor"
                   @TogglePalette="onPickColor"
                   @change="onChangeTextColor"
                 />
@@ -386,16 +386,16 @@
             <transition name="slide">
               <div class="annotation-tools" v-show="isDrawing">
                 <pencil-picker
-                  :isOpen="isShowingPencilPalette"
+                  :is-open="isShowingPencilPalette"
                   :pencil="pencil"
-                  :sizes="this.pencilPalette"
+                  :sizes="pencilPalette"
                   @toggle-palette="onPickPencil"
                   @change="onChangePencil"
                 />
 
                 <color-picker
-                  :isOpen="isShowingPalette"
-                  :color="this.color"
+                  :is-open="isShowingPalette"
+                  :color="color"
                   @TogglePalette="onPickColor"
                   @change="onChangeColor"
                 />
@@ -421,6 +421,7 @@
           <div class="separator"></div>
           <button-simple
             class="button player-button flexrow-item"
+            :active="!isCommentsHidden"
             :title="$t('playlists.actions.comments')"
             @click="onCommentClicked"
             icon="comment"
@@ -479,7 +480,7 @@
                 <page-subtitle class="flerow-item" :text="$t('edits.tasks')" />
                 <entity-task-list
                   class="task-list flexrow-item"
-                  :entries="currentEdit ? currentEdit.tasks : []"
+                  :entries="currentTasks"
                   :is-loading="!currentEdit"
                   :is-error="false"
                 />
@@ -584,7 +585,7 @@
 
 <script>
 import { mapGetters, mapActions } from 'vuex'
-import { CornerLeftUpIcon, DownloadIcon } from 'vue-feather-icons'
+import { ArrowUpRightIcon, CornerLeftUpIcon, DownloadIcon } from 'lucide-vue'
 
 import { annotationMixin } from '@/components/mixins/annotation'
 import { domMixin } from '@/components/mixins/dom'
@@ -595,29 +596,30 @@ import { previewRoomMixin } from '@/components/mixins/previewRoom'
 import { playerMixin } from '@/components/mixins/player'
 import { DEFAULT_NB_FRAMES_PICTURE } from '@/lib/playlist'
 
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import ComboboxNumber from '@/components/widgets/ComboboxNumber'
-import DescriptionCell from '@/components/cells/DescriptionCell'
-import EditEditModal from '@/components/modals/EditEditModal'
-import EntityNews from '@/components/pages/entities/EntityNews'
-import EntityPreviewFiles from '@/components/pages/entities/EntityPreviewFiles'
-import EntityTaskList from '@/components/lists/EntityTaskList'
-import EntityTimeLogs from '@/components/pages/entities/EntityTimeLogs'
-import EntityThumbnail from '@/components/widgets/EntityThumbnail'
-import ColorPicker from '@/components/widgets/ColorPicker'
-import ComboboxStyled from '@/components/widgets/ComboboxStyled'
-import PageSubtitle from '@/components/widgets/PageSubtitle'
-import PencilPicker from '@/components/widgets/PencilPicker'
-import PreviewRoom from '@/components/widgets/PreviewRoom'
-import PreviewsPerTaskType from '@/components/previews/PreviewsPerTaskType'
-import RawVideoPlayer from '@/components/pages/playlists/RawVideoPlayer'
-import Schedule from '@/components/pages/schedule/Schedule'
-import Spinner from '@/components/widgets/Spinner'
-import TaskInfo from '@/components/sides/TaskInfo'
-import VideoProgress from '@/components/previews/VideoProgress'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import ComboboxNumber from '@/components/widgets/ComboboxNumber.vue'
+import DescriptionCell from '@/components/cells/DescriptionCell.vue'
+import EditEditModal from '@/components/modals/EditEditModal.vue'
+import EntityNews from '@/components/pages/entities/EntityNews.vue'
+import EntityPreviewFiles from '@/components/pages/entities/EntityPreviewFiles.vue'
+import EntityTaskList from '@/components/lists/EntityTaskList.vue'
+import EntityTimeLogs from '@/components/pages/entities/EntityTimeLogs.vue'
+import EntityThumbnail from '@/components/widgets/EntityThumbnail.vue'
+import ColorPicker from '@/components/widgets/ColorPicker.vue'
+import ComboboxStyled from '@/components/widgets/ComboboxStyled.vue'
+import PageSubtitle from '@/components/widgets/PageSubtitle.vue'
+import PencilPicker from '@/components/widgets/PencilPicker.vue'
+import PreviewRoom from '@/components/widgets/PreviewRoom.vue'
+import PreviewsPerTaskType from '@/components/previews/PreviewsPerTaskType.vue'
+import RawVideoPlayer from '@/components/pages/playlists/RawVideoPlayer.vue'
+import Schedule from '@/components/widgets/Schedule.vue'
+import Spinner from '@/components/widgets/Spinner.vue'
+import TaskInfo from '@/components/sides/TaskInfo.vue'
+import VideoProgress from '@/components/previews/VideoProgress.vue'
 
 export default {
   name: 'edit',
+
   mixins: [
     annotationMixin,
     domMixin,
@@ -626,7 +628,9 @@ export default {
     previewRoomMixin,
     playerMixin
   ],
+
   components: {
+    ArrowUpRightIcon,
     ButtonSimple,
     CornerLeftUpIcon,
     ColorPicker,
@@ -657,6 +661,7 @@ export default {
       currentSection: 'infos',
       isLoading: true,
       isError: false,
+      movieDimensions: { width: 0, height: 0 },
       previewRoomRef: 'edits-preview-room',
       previewFileMap: new Map(),
       tempMode: false,
@@ -681,9 +686,7 @@ export default {
     this.$on('annotation-changed', this.onAnnotationChanged)
 
     this.$options.scrubbing = false
-    this.isHd = this.organisation
-      ? this.organisation.hd_by_default === 'true'
-      : false
+    this.isHd = Boolean(this.organisation.hd_by_default)
     if (this.picturePlayer) {
       this.picturePlayer.addEventListener('load', async () => {
         const wasPlaying = this.isPlaying
@@ -888,6 +891,13 @@ export default {
       })
     },
 
+    onVideoLoaded() {
+      this.movieDimensions = {
+        width: this.currentPreview.width,
+        height: this.currentPreview.height
+      }
+    },
+
     scrollToEntity() {
       // This method in unused here, required by PlaylistPlayer that shares
       // playerMixin.
@@ -1059,7 +1069,7 @@ h2.subtitle {
 
 .page {
   background: #f9f9f9;
-  padding: 0em;
+  padding: 0;
 }
 
 .page-header {
@@ -1216,11 +1226,6 @@ h2.subtitle {
   min-width: 450px;
   max-width: 450px;
   overflow-y: auto;
-}
-
-.icon {
-  margin-top: -4px;
-  height: 20px;
 }
 
 .smaller {

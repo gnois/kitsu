@@ -7,7 +7,7 @@
       <span
         :class="{
           select: true,
-          'is-top': this.isTop
+          'is-top': isTop
         }"
       >
         <select
@@ -15,7 +15,7 @@
             combobox: true,
             thin: thin,
             'select-input': true,
-            error: this.error
+            error: error
           }"
           :style="{
             width: width ? width + 'px' : undefined
@@ -89,8 +89,6 @@ export default {
     }
   },
 
-  computed: {},
-
   methods: {
     updateValue() {
       let value = this.$refs.select.value
@@ -113,11 +111,10 @@ export default {
     },
 
     getOptionLabel(option) {
-      if (this.localeKeyPrefix.length > 0) {
+      if (this.localeKeyPrefix && option.label) {
         return this.$t(this.localeKeyPrefix + option.label.toLowerCase())
-      } else {
-        return option.label
       }
+      return option.label
     }
   }
 }

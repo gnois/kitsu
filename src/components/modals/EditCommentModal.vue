@@ -13,10 +13,10 @@
           {{ $t('comments.edit_title') }}
         </h1>
 
-        <form v-on:submit.prevent>
-          <combo-box-status
+        <form @submit.prevent>
+          <combobox-status
             :label="$t('task_status.title')"
-            :task-status-list="taskStatusForCurrentUser"
+            :task-status-list="taskStatuses"
             v-model="form.task_status_id"
           />
 
@@ -24,19 +24,40 @@
             <label class="label">
               {{ $t('comments.text') }}
             </label>
-            <at-ta :members="team" name-key="full_name" limit="2">
-              <template slot="item" slot-scope="team">
-                <div class="flexrow">
-                  <people-avatar
-                    class="flexrow-item"
-                    :person="team.item"
-                    :size="20"
-                    :no-cache="true"
-                  />
-                  <span class="flexrow-item">
-                    {{ team.item.full_name }}
+            <at-ta
+              :members="atOptions"
+              name-key="full_name"
+              limit="2"
+              @input="onAtTextChanged"
+            >
+              <template #item="{ item }">
+                <template v-if="item.isTime"> ⏱️ frame </template>
+                <template v-else-if="item.isDepartment">
+                  <span
+                    class="mr05"
+                    :style="{
+                      background: item.color,
+                      width: '10px',
+                      height: '10px',
+                      'border-radius': '50%'
+                    }"
+                  >
+                    &nbsp;
                   </span>
-                </div>
+                  {{ item.full_name }}
+                </template>
+                <template v-else>
+                  <div class="flexrow">
+                    <people-avatar
+                      class="flexrow-item"
+                      :person="item"
+                      :size="20"
+                    />
+                    <span class="flexrow-item">
+                      {{ item.full_name }}
+                    </span>
+                  </div>
+                </template>
               </template>
 
               <textarea
@@ -50,6 +71,15 @@
               </textarea>
             </at-ta>
           </div>
+          <text-field
+            ref="input-link"
+            :label="$t('main.link')"
+            placeholder="https://..."
+            type="url"
+            @enter="runConfirmation"
+            v-model.trim="form.link"
+            v-if="isPreviewsComment"
+          />
           <label class="label">
             {{ $t('comments.checklist') }}
           </label>
@@ -78,7 +108,7 @@
             >
               {{ attachment.name }}
               <span @click="removeAttachment(attachment)">
-                <x-icon size="0.9x" />
+                <x-icon :size="12" />
               </span>
             </div>
           </div>
@@ -114,6 +144,7 @@
         </div>
         <modal-footer
           :error-text="$t('comments.edit_error')"
+          :is-disabled="!isValidForm"
           :is-error="isError"
           :is-loading="isLoading"
           @confirm="runConfirmation"
@@ -125,30 +156,36 @@
 </template>
 
 <script>
-import { mapGetters } from 'vuex'
-import { modalMixin } from '@/components/modals/base_modal'
-import { remove } from '@/lib/models'
-import files from '@/lib/files'
-
-import { XIcon } from 'vue-feather-icons'
-
+import { XIcon } from 'lucide-vue'
 import AtTa from 'vue-at/dist/vue-at-textarea'
-import Checklist from '@/components/widgets/Checklist'
-import ComboBoxStatus from '@/components/widgets/ComboboxStatus.vue'
-import FileUpload from '@/components/widgets/FileUpload'
-import ModalFooter from '@/components/modals/ModalFooter'
-import PeopleAvatar from '@/components/widgets/PeopleAvatar'
+import { mapGetters } from 'vuex'
+
+import files from '@/lib/files'
+import { remove } from '@/lib/models'
+import { replaceTimeWithTimecode } from '@/lib/render'
+
+import { modalMixin } from '@/components/modals/base_modal'
+
+import Checklist from '@/components/widgets/Checklist.vue'
+import ComboboxStatus from '@/components/widgets/ComboboxStatus.vue'
+import FileUpload from '@/components/widgets/FileUpload.vue'
+import ModalFooter from '@/components/modals/ModalFooter.vue'
+import PeopleAvatar from '@/components/widgets/PeopleAvatar.vue'
+import TextField from '@/components/widgets/TextField.vue'
 
 export default {
   name: 'edit-comment-modal',
+
   mixins: [modalMixin],
+
   components: {
     AtTa,
     Checklist,
-    ComboBoxStatus,
+    ComboboxStatus,
     FileUpload,
     ModalFooter,
     PeopleAvatar,
+    TextField,
     XIcon
   },
 
@@ -156,6 +193,14 @@ export default {
     active: {
       type: Boolean,
       default: false
+    },
+    frame: {
+      type: Number,
+      default: 0
+    },
+    commentToEdit: {
+      type: Object,
+      default: () => {}
     },
     isLoading: {
       type: Boolean,
@@ -165,13 +210,17 @@ export default {
       type: Boolean,
       default: false
     },
-    commentToEdit: {
-      type: Object,
-      default: () => {}
-    },
     team: {
       type: Array,
       default: () => []
+    },
+    fps: {
+      type: Number,
+      default: 25
+    },
+    revision: {
+      type: Number,
+      default: 1
     }
   },
 
@@ -182,13 +231,42 @@ export default {
       form: {
         text: '',
         task_status_id: null,
-        checklist: [{ checked: false, text: '' }]
+        checklist: [{ checked: false, text: '' }],
+        link: null
       }
     }
   },
 
   computed: {
-    ...mapGetters(['taskStatusForCurrentUser'])
+    ...mapGetters([
+      'departmentMap',
+      'getTaskStatusForCurrentUser',
+      'isCurrentUserClient',
+      'productionDepartmentIds',
+      'taskStatusForCurrentUser'
+    ]),
+
+    taskStatuses() {
+      return this.isConceptTask
+        ? this.getTaskStatusForCurrentUser(null, true)
+        : this.taskStatusForCurrentUser.filter(status => !status.for_concept)
+    },
+
+    isConceptTask() {
+      return this.$route.path.includes('concept')
+    },
+
+    isPreviewsComment() {
+      return this.commentToEdit?.previews?.length > 0
+    },
+
+    isValidForm() {
+      return Boolean(
+        !this.isPreviewsComment ||
+          !this.form.link ||
+          this.$refs['input-link']?.checkValidity()
+      )
+    }
   },
 
   methods: {
@@ -196,10 +274,12 @@ export default {
       if (!event || event.keyCode === 13 || !event.keyCode) {
         const result = {
           id: this.commentToEdit.id,
-          ...this.form,
+          text: this.form.text,
+          task_status_id: this.form.task_status_id,
           checklist: this.form.checklist.filter(item => item.text.length),
           newAttachmentFiles: this.attachmentFiles,
-          attachmentFilesToDelete: this.attachmentFilesToDelete
+          attachmentFilesToDelete: this.attachmentFilesToDelete,
+          links: this.form.link ? [this.form.link] : null
         }
         this.$emit('confirm', result)
       }
@@ -233,7 +313,8 @@ export default {
           text: this.commentToEdit.text,
           task_status_id: this.commentToEdit.task_status_id,
           checklist: [...this.commentToEdit.checklist],
-          attachment_files: [...this.commentToEdit.attachment_files]
+          attachment_files: [...this.commentToEdit.attachment_files],
+          link: this.commentToEdit.links?.[0]
         }
         if (this.form.checklist.length === 0) {
           this.form.checklist = [{ checked: false, text: '' }]
@@ -243,7 +324,8 @@ export default {
           text: '',
           task_status_id: null,
           checklist: [{ checked: false, text: '' }],
-          attachment_files: []
+          attachment_files: [],
+          link: null
         }
       }
     },
@@ -257,6 +339,17 @@ export default {
       this.form.checklist.splice(item.index, 0, item)
       for (let i = 0; i < this.form.checklist.length; i++) {
         this.form.checklist[i].index = i
+      }
+    },
+
+    onAtTextChanged(input) {
+      if (input.includes('@frame')) {
+        this.form.text = replaceTimeWithTimecode(
+          input,
+          this.revision,
+          this.frame + 1,
+          this.fps
+        )
       }
     }
   },
@@ -272,6 +365,35 @@ export default {
           this.reset()
           this.$refs.textField.focus()
         }, 100)
+      }
+    },
+
+    team: {
+      deep: true,
+      immediate: true,
+      handler() {
+        if (this.isCurrentUserClient) {
+          this.atOptions = this.team.filter(person =>
+            ['admin', 'manager', 'supervisor', 'client'].includes(person.role)
+          )
+        } else {
+          this.atOptions = [...this.team]
+        }
+        this.atOptions = this.atOptions.concat(
+          this.productionDepartmentIds.map(departmentId => {
+            const department = this.departmentMap.get(departmentId)
+            return {
+              isDepartment: true,
+              full_name: department.name,
+              color: department.color,
+              id: departmentId
+            }
+          })
+        )
+        this.atOptions.push({
+          isTime: true,
+          full_name: 'frame'
+        })
       }
     }
   }

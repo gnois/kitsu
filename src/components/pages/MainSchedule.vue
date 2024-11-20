@@ -8,7 +8,7 @@
           </label>
           <datepicker
             wrapper-class="datepicker"
-            input-class="date-input input"
+            input-class="date-input input short"
             :language="locale"
             :disabled-dates="{ days: [6, 0] }"
             :monday-first="true"
@@ -23,7 +23,7 @@
           </label>
           <datepicker
             wrapper-class="datepicker"
-            input-class="date-input input"
+            input-class="date-input input short"
             :language="locale"
             :disabled-dates="{ days: [6, 0] }"
             :monday-first="true"
@@ -48,6 +48,7 @@
         :start-date="startDate"
         :zoom-level="zoomLevel"
         :hide-man-days="true"
+        :with-milestones="false"
         @item-changed="onScheduleItemChanged"
         @root-element-expanded="expandProductionElement"
       />
@@ -74,11 +75,12 @@ import {
 } from '@/lib/time'
 import colors from '@/lib/colors'
 
-import ComboboxNumber from '@/components/widgets/ComboboxNumber'
-import Schedule from '@/components/pages/schedule/Schedule'
+import ComboboxNumber from '@/components/widgets/ComboboxNumber.vue'
+import Schedule from '@/components/widgets/Schedule.vue'
 
 export default {
   name: 'main-schedule',
+
   components: {
     ComboboxNumber,
     Datepicker,
@@ -109,7 +111,11 @@ export default {
   },
 
   mounted() {
-    this.reset()
+    let zoom = parseInt(this.$route.query.zoom)
+    zoom = isNaN(zoom) ? 1 : zoom
+    this.zoomLevel = Math.min(Math.max(zoom, 0), 3)
+
+    this.init()
   },
 
   computed: {
@@ -127,7 +133,10 @@ export default {
   methods: {
     ...mapActions(['editProduction', 'loadScheduleItems', 'saveScheduleItem']),
 
-    reset() {
+    init() {
+      if (!this.openProductions.length) {
+        return
+      }
       this.scheduleItems = this.convertScheduleItems(this.openProductions)
       this.startDate = getFirstStartDate(this.scheduleItems)
       this.endDate = getLastEndDate(this.scheduleItems)
@@ -198,12 +207,26 @@ export default {
           end_date: item.endDate.format('YYYY-MM-DD')
         })
       }
+    },
+
+    updateRoute({ zoom }) {
+      const query = { ...this.$route.query }
+
+      if (zoom !== undefined) {
+        query.zoom = String(zoom)
+      }
+
+      if (JSON.stringify(query) !== JSON.stringify(this.$route.query)) {
+        this.$router.push({ query })
+      }
     }
   },
 
-  socket: {},
-
-  watch: {},
+  watch: {
+    zoomLevel(value) {
+      this.updateRoute({ zoom: value })
+    }
+  },
 
   metaInfo() {
     return {

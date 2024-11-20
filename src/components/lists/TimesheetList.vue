@@ -24,6 +24,12 @@
         @click="toggleDayOff"
         v-if="!hideDayOff"
       />
+      <info-question-mark
+        class="flexrow-item mt05"
+        position="right"
+        :text="dayOffInfo"
+        v-if="personIsDayOff"
+      />
     </div>
 
     <div class="datatable-wrapper" ref="body" v-scroll="onBodyScroll">
@@ -61,7 +67,7 @@
           <tr
             class="datatable-row"
             v-for="(task, i) in displayedTasks"
-            :key="task.id + '-' + i"
+            :key="`${task.id}-${i}`"
           >
             <th
               class="production datatable-row-header datatable-row-header--nobd"
@@ -119,7 +125,7 @@
           <tr
             class="datatable-row"
             v-for="(task, i) in doneTasks"
-            :key="task + '-' + i"
+            :key="`${task}-${i}`"
           >
             <th
               class="production datatable-row-header datatable-row-header--nobd"
@@ -148,7 +154,7 @@
               class="name datatable-row-header"
               :style="{ left: colNamePosX }"
             >
-              <router-link :to="task.entity_path">
+              <router-link :to="entityPath(task)">
                 {{ task.full_entity_name }}
               </router-link>
             </th>
@@ -172,33 +178,55 @@
       {{ tasks.length }} {{ $tc('tasks.tasks', tasks.length) }}
     </p>
 
-    <delete-modal
-      :text="$t('timesheets.confirm_day_off')"
+    <day-off-modal
+      :active="modals.setDayOff"
+      :day-off-to-edit="{
+        date: selectedDate
+      }"
+      :is-error="isDayOffError"
+      :error-text="dayOffTextError"
       @confirm="
-        modals.dayOff = false
-        $emit('set-day-off')
+        dayOff => {
+          $emit('set-day-off', dayOff)
+        }
       "
-      @cancel="modals.dayOff = false"
-      :active="modals.dayOff"
+      @cancel="closeSetDayOffModal"
+    />
+
+    <delete-modal
+      :active="modals.unsetDayOff"
+      :text="
+        $t('days_off.confirm_unset_day_offs', {
+          start: personDayOff?.date,
+          end: personDayOff?.end_date
+        })
+      "
+      :is-error="isDayOffError"
+      :error-text="dayOffTextError"
+      @confirm="$emit('unset-day-off')"
+      @cancel="closeUnsetDayOffModal"
     />
   </div>
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
 import moment from 'moment-timezone'
 import Datepicker from 'vuejs-datepicker'
 import { en, fr } from 'vuejs-datepicker/dist/locale'
+import { mapGetters } from 'vuex'
 
 import { PAGE_SIZE } from '@/lib/pagination'
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import DeleteModal from '@/components/modals/DeleteModal'
-import EntityThumbnail from '@/components/widgets/EntityThumbnail'
-import PageSubtitle from '@/components/widgets/PageSubtitle'
-import ProductionNameCell from '@/components/cells/ProductionNameCell'
-import TableInfo from '@/components/widgets/TableInfo'
-import TaskTypeCell from '@/components/cells/TaskTypeName'
-import TimeSliderCell from '@/components/cells/TimeSliderCell'
+
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import DayOffModal from '@/components/modals/DayOffModal.vue'
+import DeleteModal from '@/components/modals/DeleteModal.vue'
+import EntityThumbnail from '@/components/widgets/EntityThumbnail.vue'
+import InfoQuestionMark from '@/components/widgets/InfoQuestionMark.vue'
+import PageSubtitle from '@/components/widgets/PageSubtitle.vue'
+import ProductionNameCell from '@/components/cells/ProductionNameCell.vue'
+import TableInfo from '@/components/widgets/TableInfo.vue'
+import TaskTypeCell from '@/components/cells/TaskTypeCell.vue'
+import TimeSliderCell from '@/components/cells/TimeSliderCell.vue'
 
 export default {
   name: 'timesheet-list',
@@ -206,8 +234,10 @@ export default {
   components: {
     ButtonSimple,
     Datepicker,
+    DayOffModal,
     DeleteModal,
     EntityThumbnail,
+    InfoQuestionMark,
     ProductionNameCell,
     PageSubtitle,
     TableInfo,
@@ -232,9 +262,9 @@ export default {
       default: false,
       type: Boolean
     },
-    done: {
+    dayOffError: {
       default: false,
-      type: Boolean
+      type: [String, Boolean]
     },
     timeSpentMap: {
       default: () => {},
@@ -255,41 +285,39 @@ export default {
   },
 
   data() {
+    const today = new Date()
     return {
       colNamePosX: '',
       colTypePosX: '',
       disabledDates: {},
       page: 1,
-      selectedDate: moment().toDate(), // By default current day.
+      selectedDate: today,
       modals: {
-        dayOff: false
+        setDayOff: false,
+        unsetDayOff: false
       }
     }
   },
 
   mounted() {
-    this.colTypePosX = this.$refs['th-prod'].offsetWidth + 'px'
-    this.colNamePosX =
-      this.$refs['th-prod'].offsetWidth +
-      this.$refs['th-type'].offsetWidth +
-      'px'
-    const beginningOfTheWeek = moment().startOf('isoWeek').toDate()
+    this.colTypePosX = `${this.$refs['th-prod'].offsetWidth}px`
+    this.colNamePosX = `${
+      this.$refs['th-prod'].offsetWidth + this.$refs['th-type'].offsetWidth
+    }px`
     this.disabledDates = {
       to:
-        this.isCurrentUserArtist &&
-        this.organisation.timesheets_locked === 'true'
-          ? beginningOfTheWeek
+        this.isCurrentUserArtist && this.organisation.timesheets_locked
+          ? moment().subtract(1, 'weeks').toDate() // Disable dates older than one week
           : undefined,
-      from: moment().toDate() // Disable dates after today.
+      from: moment().toDate() // Disable dates after today
     }
   },
 
   computed: {
     ...mapGetters([
       'isCurrentUserArtist',
-      'isCurrentUserAdmin',
-      'nbSelectedTasks',
       'organisation',
+      'personDayOff',
       'personIsDayOff',
       'productionMap',
       'taskTypeMap',
@@ -306,12 +334,25 @@ export default {
 
     displayedTasks() {
       return this.tasks.slice(0, this.page * (PAGE_SIZE / 2))
+    },
+
+    dayOffInfo() {
+      const { description, date, end_date } = this.personDayOff
+      const period =
+        end_date && date !== end_date ? `${date} - ${end_date}` : date
+      return `${description || this.$t('timesheets.day_off')} (${period})`
+    },
+
+    isDayOffError() {
+      return Boolean(this.dayOffError)
+    },
+
+    dayOffTextError() {
+      return this.dayOffError?.length ? this.dayOffError : null
     }
   },
 
   methods: {
-    ...mapActions([]),
-
     onBodyScroll(event, position) {
       const maxHeight =
         this.$refs.body.scrollHeight - this.$refs.body.offsetHeight
@@ -353,10 +394,18 @@ export default {
 
     toggleDayOff() {
       if (this.personIsDayOff) {
-        this.$emit('unset-day-off')
+        this.modals.unsetDayOff = true
       } else {
-        this.modals.dayOff = true
+        this.modals.setDayOff = true
       }
+    },
+
+    closeSetDayOffModal() {
+      this.modals.setDayOff = false
+    },
+
+    closeUnsetDayOffModal() {
+      this.modals.unsetDayOff = false
     }
   },
 
@@ -369,6 +418,10 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+.datatable-head th {
+  z-index: 6; // over the .vue-slider (z-index: 5)
+}
+
 .datatable-body tr:first-child th,
 .datatable-body tr:first-child td {
   border-top: 0;
@@ -411,6 +464,10 @@ export default {
 
 .time-spent {
   width: 100%;
+
+  :deep(.vue-slider:hover) {
+    z-index: 6; // hover the ".datatable-head th" (z-index: 6)
+  }
 }
 
 td.name {
@@ -437,9 +494,5 @@ td.name {
 .time-spent-total {
   font-size: 1.6em;
   line-height: 1.7em;
-}
-
-.vue-slider {
-  z-index: 0;
 }
 </style>

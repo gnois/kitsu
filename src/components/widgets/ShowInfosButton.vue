@@ -9,18 +9,23 @@
     :title="$t(buttonIsOn ? 'tasks.hide_infos' : 'tasks.show_infos')"
     @click="toggleInfos"
   >
-    <database-icon class="icon is-small" />
+    <kitsu-icon
+      class="icon is-small"
+      name="infos"
+      :title="$t(buttonIsOn ? 'tasks.hide_infos' : 'tasks.show_infos')"
+    />
   </button>
 </template>
 
 <script>
 import { mapGetters, mapActions } from 'vuex'
-import { DatabaseIcon } from 'vue-feather-icons'
+
+import KitsuIcon from '@/components/widgets/KitsuIcon.vue'
 
 export default {
   name: 'show-infos-button',
   components: {
-    DatabaseIcon
+    KitsuIcon
   },
 
   props: {
@@ -35,7 +40,7 @@ export default {
 
     buttonIsOn() {
       if (this.isBreakdown) {
-        return !this.isShowInfosBreakdown
+        return this.isShowInfosBreakdown
       } else {
         return this.isShowInfos
       }
@@ -87,12 +92,24 @@ export default {
     isShowInfos() {
       localStorage.setItem('show-infos', this.isShowInfos, { expires: '1M' })
     },
-
     isShowInfosBreakdown() {
-      localStorage.setItem('show-infos-breakdown', this.isShowInfosBreakdown, {
+      const value = this.isShowInfosBreakdown.toString()
+      localStorage.setItem('show-infos-breakdown', value, {
         expires: '1M'
       })
     }
   }
 }
 </script>
+
+<style scoped>
+.button {
+  border-radius: 10px;
+  padding: 0 10px;
+}
+
+.button .icon {
+  height: 18px;
+  width: 18px;
+}
+</style>

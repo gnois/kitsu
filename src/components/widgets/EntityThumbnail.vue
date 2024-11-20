@@ -5,26 +5,31 @@
     :style="{
       width: emptyWidth + 'px',
       'min-width': emptyWidth + 'px',
-      height: emptyHeight + 'px'
+      height: emptyHeight + 'px',
+      cursor: noPreview ? 'default' : 'zoom-in'
     }"
     @click="onClicked"
     v-if="isPreview && withLink"
   >
     <img
       class="thumbnail-picture"
+      loading="lazy"
+      :key="thumbnailKey"
+      :src="thumbnailPath"
       :style="imgStyle"
       :width="width || ''"
-      v-lazy="thumbnailPath"
-      :key="thumbnailKey"
+      alt=""
     />
   </a>
 
   <img
     v-else-if="isPreview && !withLink"
-    :key="thumbnailKey"
     class="thumbnail-picture"
+    loading="lazy"
+    :key="thumbnailKey"
+    :src="thumbnailPath"
     :style="imgStyle"
-    v-lazy="thumbnailPath"
+    alt=""
   />
 
   <span
@@ -103,8 +108,8 @@ export default {
     },
 
     isPreview() {
-      const previewFileId = this.previewFileId || this.entity.preview_file_id
-      return previewFileId && previewFileId.length > 0
+      const previewFileId = this.previewFileId || this.entity?.preview_file_id
+      return previewFileId?.length > 0
     },
 
     imgStyle() {
@@ -210,7 +215,7 @@ span.thumbnail-empty {
 table .thumbnail-picture.thumbnail-empty {
   background: $white-grey;
   border: 1px solid $light-grey;
-  margin: 0px;
+  margin: 0;
 }
 
 table .thumbnail-wrapper {
@@ -219,12 +224,12 @@ table .thumbnail-wrapper {
 table .thumbnail-picture {
   background-color: black;
   border: 0;
-  margin: 0px;
-  padding: 0px;
+  margin: 0;
+  padding: 0;
 }
 
 .thumbnail-wrapper {
-  padding: 0px;
+  padding: 0;
   border: 0;
   border-radius: 4px;
   display: inline-block;

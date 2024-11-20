@@ -1,22 +1,27 @@
 <template>
   <div class="topbar">
-    <div
-      id="c-mask-user-menu"
-      @click="toggleUserMenu()"
-      v-bind:class="{ 'is-active': !isUserMenuHidden }"
-    ></div>
-
     <nav class="nav">
       <div class="nav-left">
         <a
-          class="nav-item sidebar-button"
-          id="toggle-menu-button"
+          class="studio-logo-wrapper nav-item"
           @click="toggleSidebar()"
-          :class="{ selected: !isSidebarHidden }"
           v-if="!isCurrentUserClient"
         >
-          ≡
+          <img
+            class="studio-logo"
+            :src="logoPath"
+            v-if="organisation?.has_avatar"
+          />
+          <img class="studio-logo" src="@/assets/kitsu.png" v-else />
         </a>
+        <span class="studio-logo-wrapper nav-item" v-else>
+          <img
+            class="studio-logo"
+            :src="logoPath"
+            v-if="organisation?.has_avatar"
+          />
+          <img class="studio-logo" src="@/assets/kitsu.png" v-else />
+        </span>
 
         <div class="flexrow topbar-menu" v-if="isProductionContext">
           <div class="flexrow-item subitem">
@@ -28,7 +33,7 @@
             />
           </div>
           <div class="flexrow-item">
-            <chevron-right-icon class="mt05" size="1.4x" />
+            <chevron-right-icon class="align-middle" :size="20" />
           </div>
           <div class="flexrow-item subitem">
             <topbar-section-list
@@ -38,7 +43,7 @@
             />
           </div>
           <div class="flexrow-item" v-if="isEpisodeContext">
-            <chevron-right-icon class="mt05" size="1.4x" />
+            <chevron-right-icon class="align-middle" :size="20" />
           </div>
           <div class="flexrow-item subitem">
             <topbar-episode-list
@@ -74,8 +79,8 @@
         <router-link
           class="nav-item"
           :to="{
-            name: 'todos-tab',
-            params: { tab: 'todos' }
+            name: 'todos',
+            query: { section: 'todos' }
           }"
           v-if="!isCurrentUserAdmin && !isCurrentUserClient"
         >
@@ -85,8 +90,8 @@
         <router-link
           class="nav-item mr05"
           :to="{
-            name: 'todos-tab',
-            params: { tab: 'timesheets' }
+            name: 'todos',
+            query: { section: 'timesheets' }
           }"
           v-if="!isCurrentUserAdmin && !isCurrentUserClient"
         >
@@ -97,108 +102,111 @@
           v-if="mainConfig.indexer_configured"
         />
         <div class="nav-item">
-          <button data-canny-changelog class="changelog-button">
+          <a
+            class="changelog-button"
+            target="_blank"
+            href="https://cgwire.canny.io/changelog"
+          >
             <zap-icon />
-          </button>
+          </a>
         </div>
-        <notification-bell />
+        <notification-bell class="nav-item notification-bell" />
         <div class="nav-item">
           <a
-            class="changelog-button help-button"
+            class="help-button"
             href="https://kitsu.cg-wire.com/"
             target="_blank"
           >
             <help-circle-icon />
           </a>
         </div>
-        <div
-          :class="{
-            'nav-item': true,
-            'user-nav': true,
-            active: !isUserMenuHidden
-          }"
-          ref="user-name"
-          @click="toggleUserMenu"
-        >
+        <div class="nav-item pointer" @click="toggleUserMenu">
           <people-avatar
-            ref="avatar"
             class="avatar"
-            :no-cache="true"
-            :person="user"
+            :is-lazy="false"
             :is-link="false"
+            :person="user"
           />
         </div>
       </div>
     </nav>
 
-    <nav
-      class="user-menu"
-      ref="user-menu"
-      :style="{
-        top: isUserMenuHidden ? '-480px' : '60px'
-      }"
-    >
+    <div
+      class="c-mask-user-menu"
+      @click="toggleUserMenu()"
+      v-if="!isUserMenuHidden"
+    ></div>
+
+    <nav class="user-menu" v-if="!isUserMenuHidden">
       <ul>
-        <router-link to="/profile" @click.native="toggleUserMenu()">
-          <li>
+        <li>
+          <router-link
+            :to="{ name: 'profile' }"
+            @click.native="toggleUserMenu()"
+          >
             {{ $t('main.profile') }}
-          </li>
-        </router-link>
+          </router-link>
+        </li>
         <li @click="toggleDarkTheme">
-          <span v-if="!isDarkTheme">
-            {{ $t('main.dark_theme') }}
-          </span>
-          <span v-else>
-            {{ $t('main.white_theme') }}
-          </span>
+          {{ !isDarkTheme ? $t('main.dark_theme') : $t('main.white_theme') }}
         </li>
         <li @click="setSupportChat(!isSupportChat)">
-          <span v-if="isSupportChat">
-            {{ $t('main.hide_support_chat') }}
-          </span>
-          <span v-else>
-            {{ $t('main.show_support_chat') }}
-          </span>
+          {{
+            isSupportChat
+              ? $t('main.hide_support_chat')
+              : $t('main.show_support_chat')
+          }}
         </li>
         <hr />
-        <a
-          href="https://www.youtube.com/playlist?list=PLp_1gB5ZBHXqnQgZ4TCrAt7smxesaDo29"
-          target="_blank"
-        >
-          <li>
+        <li>
+          <a
+            href="https://www.youtube.com/playlist?list=PLp_1gB5ZBHXqnQgZ4TCrAt7smxesaDo29"
+            target="_blank"
+          >
             {{ $t('main.tutorials') }}
-          </li>
-        </a>
-        <a @click="display.shortcutModal = true">
-          <li>
+          </a>
+        </li>
+        <li>
+          <a @click="display.shortcutModal = true">
             {{ $t('keyboard.shortcuts') }}
-          </li>
-        </a>
+          </a>
+        </li>
         <hr />
-        <a href="https://discord.gg/VbCxtKN" target="_blank">
-          <li>Discord</li>
-        </a>
-        <a href="https://cgwire.canny.io" target="_blank">
-          <li>Roadmap / Feedback</li>
-        </a>
+        <li>
+          <a href="https://discord.gg/VbCxtKN" target="_blank"> Discord </a>
+        </li>
+        <li>
+          <a href="https://linkedin.com/company/cgwire/" target="_blank">
+            LinkedIn
+          </a>
+        </li>
+        <li>
+          <a href="https://twitter.com/cgwirekitsu" target="_blank"> X </a>
+        </li>
+        <li>
+          <a href="https://cgwire.canny.io" target="_blank">
+            Roadmap / Feedback
+          </a>
+        </li>
         <hr />
-        <a href="https://cg-wire.com/about" target="_blank">
-          <li>
+        <li>
+          <a href="https://cg-wire.com/about" target="_blank">
             {{ $t('main.about') }}
-          </li>
-        </a>
+          </a>
+        </li>
         <li class="version">Kitsu {{ kitsuVersion }}</li>
         <hr />
         <li class="flexrow" @click="onLogoutClicked">
-          <log-out-icon class="flexrow-item" size="1x" />
+          <log-out-icon class="flexrow-item icon-1x" />
           <span class="flexrow-item">{{ $t('main.logout') }}</span>
         </li>
       </ul>
     </nav>
 
     <shortcut-modal
-      :active="display.shortcutModal"
+      active
       @cancel="display.shortcutModal = false"
+      v-if="display.shortcutModal"
     />
   </div>
 </template>
@@ -211,21 +219,23 @@ import {
   HelpCircleIcon,
   LogOutIcon,
   ZapIcon
-} from 'vue-feather-icons'
+} from 'lucide-vue'
 
 import localPreferences from '@/lib/preferences'
-import GlobalSearchField from '@/components/tops/GlobalSearchField'
-import NotificationBell from '@/components/widgets/NotificationBell'
-import PeopleAvatar from '@/components/widgets/PeopleAvatar'
-import ShortcutModal from '@/components/modals/ShortcutModal'
-import TopbarEpisodeList from '@/components/tops/TopbarEpisodeList'
-import TopbarProductionList from '@/components/tops/TopbarProductionList'
-import TopbarSectionList from '@/components/tops/TopbarSectionList'
+
+import GlobalSearchField from '@/components/tops/GlobalSearchField.vue'
+import NotificationBell from '@/components/widgets/NotificationBell.vue'
+import PeopleAvatar from '@/components/widgets/PeopleAvatar.vue'
+import ShortcutModal from '@/components/modals/ShortcutModal.vue'
+import TopbarEpisodeList from '@/components/tops/TopbarEpisodeList.vue'
+import TopbarProductionList from '@/components/tops/TopbarProductionList.vue'
+import TopbarSectionList from '@/components/tops/TopbarSectionList.vue'
 
 import { version } from '@/../package.json'
 
 export default {
   name: 'topbar',
+
   components: {
     ChevronLeftIcon,
     ChevronRightIcon,
@@ -255,43 +265,41 @@ export default {
   },
 
   mounted() {
-    Canny('initChangelog', {
-      appID: '5db968118d1a9c132c168d54',
-      position: 'bottom',
-      align: 'right'
-    })
     this.currentProjectSection = this.getCurrentSectionFromRoute()
     this.setProductionFromRoute()
   },
 
   computed: {
     ...mapGetters([
-      'assetsPath',
       'currentEpisode',
       'currentProduction',
       'episodes',
       'episodeOptionGroups',
       'isCurrentUserAdmin',
-      'isCurrentUserArtist',
       'isCurrentUserClient',
       'isCurrentUserManager',
       'isCurrentUserSupervisor',
       'isCurrentUserVendor',
       'isDarkTheme',
-      'isSidebarHidden',
       'isSupportChat',
       'isUserMenuHidden',
       'isTVShow',
-      'isNewNotification',
       'lastProductionScreen',
       'lastProductionViewed',
       'mainConfig',
       'openProductions',
-      'openProductionOptions',
+      'organisation',
       'productionMap',
       'productionEditTaskTypes',
       'user'
     ]),
+
+    logoPath() {
+      return (
+        '/api/pictures/thumbnails/' +
+        `organisations/${this.organisation.id}.png`
+      )
+    },
 
     assetSections() {
       return ['assets', 'assetTypes', 'playlists']
@@ -311,7 +319,11 @@ export default {
 
     // Asset pages require a all section and a main pack section.
     currentEpisodeOptionGroups() {
-      if (this.assetSections.includes(this.currentProjectSection)) {
+      let section = this.isCurrentUserClient ? 'playlists' : 'assets'
+      if (this.currentProjectSection) {
+        section = this.currentProjectSection
+      }
+      if (this.assetSections.includes(section)) {
         return [
           {
             name: '',
@@ -321,7 +333,7 @@ export default {
             ]
           }
         ].concat(this.episodeOptionGroups)
-      } else if (['playlists'].includes(this.currentProjectSection)) {
+      } else if (['playlists'].includes(section)) {
         return [
           {
             name: '',
@@ -331,14 +343,14 @@ export default {
             ]
           }
         ].concat(this.episodeOptionGroups)
-      } else if (['edits'].includes(this.currentProjectSection)) {
+      } else if (['edits'].includes(section)) {
         return [
           {
             name: '',
             episodeList: [{ label: this.$t('main.all_edits'), value: 'all' }]
           }
         ].concat(this.episodeOptionGroups)
-      } else if (['breakdown'].includes(this.currentProjectSection)) {
+      } else if (['breakdown'].includes(section)) {
         return [
           {
             name: '',
@@ -392,13 +404,24 @@ export default {
         }
       }
       if (production.production_type === 'tvshow') {
-        route.name = `episode-${section}`
-        route.params.episode_id = production.first_episode_id
+        if (section !== 'episodes') {
+          route.name = `episode-${section}`
+        }
+        if (
+          !['edits', 'episodes'].includes(section) &&
+          production.first_episode_id
+        ) {
+          route.params.episode_id = production.first_episode_id
+        } else {
+          route.params.episode_id = 'all'
+        }
       }
       return route
     },
 
     sectionOptions() {
+      if (!this.currentProduction) return []
+
       let options = []
       const isNotOnlyAssets =
         this.currentProduction.production_type !== 'assets'
@@ -420,10 +443,18 @@ export default {
       }
 
       if (this.isTVShow && !this.isCurrentUserClient) {
-        options.push({ label: 'Episodes', value: 'episodes' })
+        options.push({ label: this.$t('episodes.title'), value: 'episodes' })
       }
 
+      options = options.concat([{ label: 'separator', value: 'separator' }])
+
       if (!this.isCurrentUserClient) {
+        options = options.concat([
+          { label: this.$t('concepts.title'), value: 'concepts' }
+        ])
+      }
+
+      if (!this.isCurrentUserClient && isNotOnlyShots) {
         options = options.concat([
           { label: this.$t('breakdown.title'), value: 'breakdown' }
         ])
@@ -507,10 +538,9 @@ export default {
     },
 
     currentSectionOption() {
-      return (
-        this.sectionOptions.find(o => o.value === this.currentProjectSection) ||
-        {}
-      ).value
+      return this.sectionOptions.find(
+        option => option.value === this.currentProjectSection
+      )?.value
     }
   },
 
@@ -519,7 +549,6 @@ export default {
       'clearEpisodes',
       'clearSelectedTasks',
       'loadEpisodes',
-      'loadMilestones',
       'incrementNotificationCounter',
       'logout',
       'setProduction',
@@ -566,7 +595,9 @@ export default {
     clearContext() {
       this.silent = true
       this.currentProductionId = null
-      this.currentProjectSection = null
+      this.currentProjectSection = this.isCurrentUserClient
+        ? 'playlists'
+        : 'assets'
       if (!this.isTVShow) {
         this.setCurrentEpisode(null)
         this.currentEpisodeId = null
@@ -579,7 +610,7 @@ export default {
       const routeProductionId = this.$route.params.production_id
       const routeEpisodeId = this.$route.params.episode_id
       if (this.isProductionChanged(routeProductionId)) {
-        this.configureProduction(routeProductionId)
+        this.configureProduction(routeProductionId, routeEpisodeId)
       } else if (this.isEpisodeChanged(routeEpisodeId)) {
         this.configureEpisode(routeEpisodeId)
       } else {
@@ -587,12 +618,31 @@ export default {
       }
     },
 
-    configureProduction(routeProductionId) {
+    configureProduction(routeProductionId, routeEpisodeId = undefined) {
       this.setProduction(routeProductionId)
+      this.currentProductionId = routeProductionId
       if (this.isTVShow) {
         this.loadEpisodes()
           .then(episodes => {
-            this.updateCombosFromRoute()
+            const query = this.$route.query
+            if (this.currentProjectSection === 'assets') {
+              this.currentEpisodeId = 'all'
+            } else {
+              let episode = episodes.find(({ id }) => id === routeEpisodeId)
+              if (!episode) {
+                episode = episodes.find(({ status }) => status === 'running')
+                query.search = ''
+              }
+              this.currentEpisodeId = episode?.id || 'all'
+            }
+            this.$router.push({
+              params: {
+                production_id: routeProductionId,
+                section: this.currentProjectSection,
+                episode_id: this.currentEpisodeId
+              },
+              query
+            })
           })
           .catch(console.error)
       } else {
@@ -766,17 +816,13 @@ export default {
   },
 
   watch: {
+    // Most changes occur through the route modification. We need to update
+    // the context when the route changes.
     $route() {
       const productionId = this.$route.params.production_id
       if (productionId) {
         this.updateContext(productionId)
       }
-    },
-
-    currentProduction() {
-      this.$nextTick(() => {
-        this.loadMilestones()
-      })
     },
 
     currentEpisode() {
@@ -809,12 +855,6 @@ export default {
         ) {
           this.incrementNotificationCounter()
         }
-      },
-
-      'person:update'(eventData) {
-        if (this.user.id === eventData.person_id) {
-          this.$refs.avatar.reloadAvatar()
-        }
       }
     }
   }
@@ -828,10 +868,6 @@ export default {
     color: $white-grey;
   }
 
-  #toggle-menu-button:hover {
-    color: $white-grey;
-  }
-
   .topbar .nav,
   .user-menu {
     background-color: $black;
@@ -840,60 +876,54 @@ export default {
     border-bottom: 1px solid #2f3136;
   }
 
-  .changelog-button {
+  .changelog-button,
+  .help-button {
     color: $grey;
+
+    &:hover {
+      color: $white;
+    }
   }
 
   hr {
     background-color: $grey-strong;
   }
-
-  .user-menu li {
-    &:not(.version):hover {
-      background: $dark-grey-light;
-    }
-  }
 }
 
 .nav {
-  box-shadow: 0px 0px 6px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.2);
   left: 0;
   max-height: 60px;
   min-height: 60px;
   position: fixed;
   right: 0;
   z-index: 204;
-}
-
-#toggle-menu-button {
-  font-size: 2em;
-}
-
-.avatar {
-  margin-right: 10px;
-  min-width: 40px;
-}
-
-.user-nav {
-  cursor: pointer;
-}
-
-.user-nav.active {
+  border-bottom: 1px solid transparent;
 }
 
 .user-menu {
-  background-color: white;
+  animation: slide-down 0.5s ease;
+  background-color: $white;
   box-shadow: 2px 3px 3px rgba(0, 0, 0, 0.2);
   border-left: 1px solid $white-grey;
   border-bottom: 1px solid $white-grey;
   border-bottom-left-radius: 10px;
   min-width: 220px;
-  padding: 1em 1em 1em 1em;
+  padding: 10px;
   position: fixed;
-  transition: top 0.5s ease;
   right: 0;
+  top: 60px;
   width: 220px;
   z-index: 203;
+}
+
+@keyframes slide-down {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 .user-menu ul {
@@ -909,114 +939,62 @@ export default {
 
   &:not(.version):hover {
     cursor: pointer;
-    background: $white-grey;
+    background: var(--background-hover);
     border-radius: 5px;
   }
 }
 
 .user-menu ul a {
+  display: block;
   color: #333;
 }
 
-#c-mask-user-menu {
+.c-mask-user-menu {
   position: fixed;
   z-index: 202;
   top: 0;
   left: 0;
-  width: 0;
-  height: 0;
-  overflow: hidden;
-  background-color: #000;
-  opacity: 0;
-}
-
-#c-mask-user-menu.is-active {
   width: 100%;
   height: 100%;
-}
-
-.nav-right {
-  padding-right: 0;
-  flex-grow: 0;
-}
-
-.context-selector-label {
-  margin-right: 1em;
-}
-
-.context-selector {
-  margin-top: 23px;
-  margin-right: 1em;
-}
-
-.icon-link {
-  margin: 0 0.5em;
-}
-
-strong {
-  margin-right: 1em;
+  overflow: hidden;
 }
 
 .version {
   color: $grey;
 }
 
-.changelog-button {
-  background: transparent;
+.changelog-button,
+.help-button {
   color: $light-grey;
-  cursor: pointer;
+
+  &:hover {
+    color: var(--text);
+  }
 }
 
 .help-button {
-  background: transparent;
-  color: $light-grey;
-  cursor: pointer;
   margin-top: 3px;
+}
 
-  &:hover {
-    color: $light-grey;
+.studio-logo-wrapper {
+  margin: 8px 8px;
+  margin-right: 1em;
+  padding: 0;
+
+  .studio-logo {
+    border-radius: 5px;
+    min-height: 36px;
+    width: 36px;
   }
 }
 
-.user-menu {
-  padding: 10px;
-  border-bottom-left-radius: 10px;
+.notification-bell {
+  margin-top: 9px;
 }
 
 @media screen and (max-width: 768px) {
-  .home-button {
-    display: none;
-  }
-
   .nav-right {
     display: flex;
-    flex: 0;
-  }
-
-  .nav-item {
-    justify-content: right;
-  }
-
-  .user-name {
-    display: none;
-  }
-
-  .avatar {
-    margin-right: 0;
-  }
-
-  .user-menu {
-    right: -160;
-  }
-
-  .icon-link,
-  .context-selector-label {
-    display: none;
-  }
-
-  .field.context-selector {
-    padding: 0;
-    margin-top: 2em;
   }
 }
 </style>

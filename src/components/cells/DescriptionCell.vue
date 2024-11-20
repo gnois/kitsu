@@ -3,14 +3,18 @@
     <template v-if="full">
       <div
         class="description-shorten-text"
-        v-html="compileMarkdown(entry.description || '')"
+        v-html="renderMarkdown(entry.description)"
       ></div>
     </template>
     <template v-else>
       <div class="c-mask" v-if="isOpen"></div>
       <span
         class="description-shorten-text selectable"
-        v-html="compileMarkdown(shortenText(entry.description || '', 20))"
+        v-html="
+          renderMarkdown(shortenText(entry.description, 20), {
+            allowedLinkTag: false
+          })
+        "
       >
       </span>
       <div
@@ -22,7 +26,7 @@
         <div
           class="tooltip-text"
           @keyup.esc="onClick"
-          v-html="compileMarkdown(entry.description)"
+          v-html="renderMarkdown(entry.description)"
           v-if="!isEditing"
         ></div>
         <textarea
@@ -41,20 +45,17 @@
 
 <script>
 import { renderMarkdown } from '@/lib/render'
-import { mapGetters, mapActions } from 'vuex'
 import stringHelpers from '@/lib/string'
 
 export default {
   name: 'description-cell',
+
   data() {
     return {
       isEditing: false,
-      isOpen: false,
-      timeout: null
+      isOpen: false
     }
   },
-
-  components: {},
 
   props: {
     editable: {
@@ -71,27 +72,15 @@ export default {
     }
   },
 
-  computed: {
-    ...mapGetters([]),
-
-    content() {
-      return this.compileMarkdown(this.entry.description)
-    }
-  },
-
   methods: {
-    ...mapActions([]),
-
-    compileMarkdown(input) {
-      return renderMarkdown(input)
-    },
+    renderMarkdown,
 
     shortenText: stringHelpers.shortenText,
 
     onClick(event) {
       if (
-        event.target.className.substring(0, 11) === 'description' ||
-        event.target.parentNode.className.substring(0, 11) === 'description' ||
+        (event.currentTarget.classList.contains('description-cell') &&
+          !event.target.closest('.description-cell .tooltip')) ||
         event.keyCode === 27
       ) {
         this.isOpen = !this.isOpen
@@ -169,7 +158,7 @@ td {
   }
 
   textarea {
-    box-shadow: inset 0 0 3px 0px $grey;
+    box-shadow: inset 0 0 3px 0 $grey;
     padding: 0.5em;
     color: inherit;
     font-size: 0.95em;

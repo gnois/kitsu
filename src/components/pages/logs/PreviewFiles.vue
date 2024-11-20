@@ -1,12 +1,12 @@
 <template>
   <div class="mt1">
     <p class="flexrow">
-      <em class="flexrow-item">{{ $t('logs.preview_files.explaination') }}</em>
+      <em class="flexrow-item">{{ $t('logs.preview_files.explanation') }}</em>
       <span class="filler"></span>
       <button-simple class="flexrow-item" icon="refresh" @click="reload" />
     </p>
     <template v-if="previewFiles.length === 0 && !previewFilesLoading">
-      {{ $t('logs.preview_files.empty_list') }}
+      <p class="empty">{{ $t('logs.preview_files.empty_list') }}</p>
     </template>
     <template v-else>
       <preview-file-list
@@ -23,11 +23,12 @@ import { mapActions, mapGetters } from 'vuex'
 
 import { timeMixin } from '@/components/mixins/time'
 
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import PreviewFileList from '@/components/lists/PreviewFileList'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import PreviewFileList from '@/components/lists/PreviewFileList.vue'
 
 export default {
-  name: 'PreviewFiles',
+  name: 'preview-files',
+
   mixins: [timeMixin],
 
   components: {
@@ -107,5 +108,13 @@ em {
 .status[data-status='processing'] {
   color: white;
   background: $blue;
+}
+
+.empty {
+  color: var(--text);
+  font-size: 1.2em;
+  font-weight: 500;
+  text-align: center;
+  margin-top: 1em;
 }
 </style>

@@ -12,7 +12,7 @@
 
       <div class="search-field">
         <span class="search-icon">
-          <search-icon width="20" />
+          <search-icon :size="20" />
         </span>
         <input
           ref="search-field"
@@ -61,11 +61,11 @@
         <spinner />
       </div>
       <div v-else>
-        <div class="pb1" v-if="this.searchFilter.assets">
+        <div class="pb1" v-if="searchFilter.assets">
           <h2 class="mt0">
-            {{ $t('assets.title') }} ({{ this.results.assets?.length || 0 }})
+            {{ $t('assets.title') }} ({{ results.assets?.length || 0 }})
           </h2>
-          <div class="has-text-centered" v-if="!this.results.assets?.length">
+          <div class="has-text-centered" v-if="!results.assets?.length">
             {{ $t('main.search.no_result') }}
           </div>
           <div class="result-list" v-else>
@@ -76,7 +76,7 @@
               }"
               :key="entity.id"
               @mouseover="selectResultById(entity.id)"
-              v-for="entity in this.results.assets"
+              v-for="entity in results.assets"
             >
               <entity-preview
                 :empty-height="200"
@@ -98,18 +98,35 @@
                   {{ entity.asset_type_name }} / {{ entity.name }}
                 </div>
                 <div class="match">
-                  <span class="match-icon"><search-icon width="15" /></span>
+                  <span class="match-icon">
+                    <search-icon :size="15" />
+                  </span>
                   {{ getMatchDetails(entity) }}
                 </div>
               </router-link>
             </div>
           </div>
+          <p
+            class="has-text-centered mt2"
+            v-if="
+              results.assets.length !== 0 && results.assets.length % 12 === 0
+            "
+          >
+            <button
+              class="button is-link"
+              @click="loadMoreResults('assets')"
+              v-if="!isLoadingMoreAssets"
+            >
+              {{ $t('main.load_more') }}
+            </button>
+            <spinner v-else />
+          </p>
         </div>
-        <div class="pb1" v-if="this.searchFilter.shots">
-          <h2 class="mt0">
-            {{ $t('shots.title') }} ({{ this.results.shots?.length || 0 }})
+        <div class="pb1" v-if="searchFilter.shots">
+          <h2 class="mt1">
+            {{ $t('shots.title') }} ({{ results.shots?.length || 0 }})
           </h2>
-          <div class="has-text-centered" v-if="!this.results.shots?.length">
+          <div class="has-text-centered" v-if="!results.shots?.length">
             {{ $t('main.search.no_result') }}
           </div>
           <div class="result-list" v-else>
@@ -120,7 +137,7 @@
               }"
               :key="entity.id"
               @mouseover="selectResultById(entity.id)"
-              v-for="entity in this.results.shots"
+              v-for="entity in results.shots"
             >
               <entity-preview
                 :empty-height="200"
@@ -145,7 +162,9 @@
                   {{ entity.sequence_name }} / {{ entity.name }}
                 </div>
                 <div class="match">
-                  <span class="match-icon"><search-icon width="15" /></span>
+                  <span class="match-icon">
+                    <search-icon :size="15" />
+                  </span>
                   <span class="match-details">{{
                     getMatchDetails(entity)
                   }}</span>
@@ -153,49 +172,20 @@
               </router-link>
             </div>
           </div>
-        </div>
-        <!--
-        <div class="pb1" v-if="this.searchFilter.persons">
-          <h2 class="mt0">
-            {{ $t('people.title') }} ({{ this.results.persons?.length || 0 }})
-          </h2>
-          <div class="has-text-centered" v-if="!this.results.persons.length">
-            {{ $t('main.search.no_result') }}
-          </div>
-          <div class="result-list" v-else>
-            <div
-              class="result flexcolumn"
-              :class="{
-                'selected-result': flattenResults[selectedIndex] === person
-              }"
-              :key="person.id"
-              @mouseover="selectResultById(person.id)"
-              v-for="person in this.results.persons"
+          <p
+            class="has-text-centered mt2"
+            v-if="results.shots.length !== 0 && results.shots.length % 12 === 0"
+          >
+            <button
+              class="button is-link"
+              @click="loadMoreResults('shots')"
+              v-if="!isLoadingMoreShots"
             >
-              <router-link
-                :id="`result-link-${person.id}`"
-                :to="personPath(person)"
-              >
-                <div class="flexcolumn has-text-centered">
-                  <people-avatar
-                    class="mauto"
-                    :is-link="false"
-                    :person="person"
-                    :size="200"
-                  />
-                  <div class="result-description">
-                    <div class="person-name">{{ person.name }}</div>
-                    <div class="person-email">{{ person.email }}</div>
-                    <div class="person-role">
-                      {{ $t(`people.role.${person.role}`) }}
-                    </div>
-                  </div>
-                </div>
-              </router-link>
-            </div>
-          </div>
+              {{ $t('main.load_more') }}
+            </button>
+            <spinner v-else />
+          </p>
         </div>
-        -->
       </div>
     </div>
   </div>
@@ -208,29 +198,25 @@
 import { mapGetters, mapActions } from 'vuex'
 import { getEntityPath, getPersonPath } from '@/lib/path'
 
-import { SearchIcon } from 'vue-feather-icons'
+import { SearchIcon } from 'lucide-vue'
+import stringHelpers from '@/lib/string'
 
-// import peopleStore from '@/store/modules/people'
-
-import Checkbox from '@/components/widgets/Checkbox'
-import Combobox from '@/components/widgets/Combobox'
-import ComboboxProduction from '@/components/widgets/ComboboxProduction'
-import EntityPreview from '@/components/widgets/EntityPreview'
-// import PeopleAvatar from '@/components/widgets/PeopleAvatar'
-import Spinner from '@/components/widgets/Spinner'
+import Checkbox from '@/components/widgets/Checkbox.vue'
+import Combobox from '@/components/widgets/Combobox.vue'
+import ComboboxProduction from '@/components/widgets/ComboboxProduction.vue'
+import EntityPreview from '@/components/widgets/EntityPreview.vue'
+import Spinner from '@/components/widgets/Spinner.vue'
 
 const AVAILABLE_LIMITS = [12, 24, 48]
 
 export default {
   name: 'entity-search',
-  mixins: [],
 
   components: {
     Checkbox,
     Combobox,
     ComboboxProduction,
     EntityPreview,
-    // PeopleAvatar,
     SearchIcon,
     Spinner
   },
@@ -238,6 +224,8 @@ export default {
   data() {
     return {
       isLoading: false,
+      isLoadingMoreAssets: false,
+      isLoadingMoreShots: false,
       limit: AVAILABLE_LIMITS[0],
       limitOptions: AVAILABLE_LIMITS.map(value => ({ label: value, value })),
       productionId: '',
@@ -256,14 +244,14 @@ export default {
     }
   },
 
-  props: {},
-
   mounted() {
     window.addEventListener('keydown', event => {
-      if (event.ctrlKey && event.altKey && event.keyCode === 70) {
-        if (this.$refs['search-field']) {
-          this.$refs['search-field'].focus()
-        }
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.altKey &&
+        event.keyCode === 70
+      ) {
+        this.searchField.focus()
       } else if (event.keyCode === 40) {
         this.selectNext()
       } else if (event.keyCode === 38) {
@@ -338,6 +326,29 @@ export default {
         .catch(console.error)
         .finally(() => {
           this.isLoading = false
+        })
+    },
+
+    loadMoreResults(indexName) {
+      const index_names = [indexName]
+      const loadingField = `isLoadingMore${stringHelpers.capitalize(indexName)}`
+      this[loadingField] = true
+
+      this.searchData({
+        query: this.searchQuery,
+        limit: this.limit,
+        offset: this.results[indexName].length,
+        productionId: this.productionId,
+        index_names
+      })
+        .then(results => {
+          this.results[indexName] = this.results[indexName].concat(
+            results[indexName]
+          )
+        })
+        .catch(console.error)
+        .finally(() => {
+          this[loadingField] = false
         })
     },
 
@@ -458,7 +469,7 @@ export default {
     position: absolute;
     color: $grey;
     z-index: 4;
-    top: 15px;
+    top: 17px;
     left: 10px;
   }
 }
@@ -531,7 +542,7 @@ export default {
       opacity: 0.7;
 
       .match-icon {
-        margin-top: -2px;
+        margin-top: 2px;
         margin-right: 0.5em;
       }
     }

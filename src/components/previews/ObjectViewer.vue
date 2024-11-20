@@ -17,6 +17,8 @@
       :environment-image="backgroundUrl"
       :skybox-image="isEnvironmentSkybox ? backgroundUrl : ''"
       :src="previewUrl"
+      :variant-name="isWireframe ? 'variant-wireframe' : null"
+      @before-render="createWireframeVariant($event.target.model)"
     />
   </div>
 </template>
@@ -29,7 +31,7 @@ export default {
 
   props: {
     previewUrl: {
-      default: '',
+      default: null,
       type: String
     },
     light: {
@@ -50,6 +52,43 @@ export default {
     isEnvironmentSkybox: {
       default: false,
       type: Boolean
+    },
+    isWireframe: {
+      default: false,
+      type: Boolean
+    }
+  },
+
+  methods: {
+    /**
+     * Create a wireframe variant of each material of a 3D model
+     * @param {Model} model - model from model-viewer component
+     */
+    createWireframeVariant(model) {
+      const maxIndex = model.materials.length
+      for (let i = 0; i < maxIndex; i++) {
+        const variantMaterial = model.createMaterialInstanceForVariant(
+          i,
+          `material-wireframe-${i}`,
+          'variant-wireframe',
+          this.isWireframe
+        )
+        if (!variantMaterial) {
+          continue
+        }
+        const texture = variantMaterial.normalTexture
+        const materialsSymbol = Object.getOwnPropertySymbols(texture).find(
+          symbol => symbol.description === 'materials'
+        )
+        const materials = texture[materialsSymbol]
+        materials.forEach(material => {
+          material.wireframe = true
+          material.color.setHex(0xc0c0c0)
+          material.emissive?.setHex(0xc0c0c0)
+          material.emissiveMap = null
+          material.envMapIntensity = 0
+        })
+      }
     }
   }
 }

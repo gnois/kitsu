@@ -1,9 +1,9 @@
 <template>
   <div ref="page" class="columns fixed-page">
     <div class="column main-column">
-      <div class="person page">
+      <div class="person page" v-if="person">
         <div ref="header" class="flexrow page-header">
-          <div class="flexrow-item" v-if="person">
+          <div class="flexrow-item">
             <people-avatar
               :person="person"
               :size="80"
@@ -12,165 +12,137 @@
             />
           </div>
           <div class="flexrow-item entity-title">
-            {{ person ? person.name : '' }}
+            {{ person.name }}
           </div>
         </div>
 
-        <div ref="tabs" class="task-tabs tabs">
-          <ul v-if="person">
-            <li :class="{ 'is-active': isActiveTab('todos') }">
-              <router-link
-                :to="{
-                  name: 'person',
-                  params: {
-                    person_id: person.id
-                  }
-                }"
-              >
-                {{ $t('tasks.current') }}
-              </router-link>
-            </li>
-            <li :class="{ 'is-active': isActiveTab('done') }">
-              <router-link
-                :to="{
-                  name: 'person-tab',
-                  params: {
-                    tab: 'done',
-                    person_id: person.id
-                  }
-                }"
-              >
-                {{ $t('tasks.done') }} ({{ displayedPersonDoneTasks.length }})
-              </router-link>
-            </li>
-            <li
-              :class="{ 'is-active': isActiveTab('timesheets') }"
-              v-if="isCurrentUserManager"
-            >
-              <router-link
-                :to="{
-                  name: 'person-tab',
-                  params: {
-                    tab: 'timesheets',
-                    person_id: person.id
-                  }
-                }"
-              >
-                {{ $t('timesheets.title') }}
-              </router-link>
-            </li>
-            <li :class="{ 'is-active': isActiveTab('schedule') }">
-              <router-link
-                :to="{
-                  name: 'person-tab',
-                  params: {
-                    tab: 'schedule',
-                    person_id: person.id
-                  }
-                }"
-              >
-                {{ $t('schedule.title') }}
-              </router-link>
-            </li>
-          </ul>
-        </div>
+        <template v-if="!person.is_bot && isCurrentUserAllowed">
+          <route-section-tabs
+            class="section-tabs mt1"
+            :active-tab="activeTab"
+            :route="$route"
+            :tabs="todoTabs"
+          />
 
-        <div ref="search" class="flexrow">
-          <search-field
-            :class="{
-              'search-field': true,
-              'flexrow-item': true
-            }"
-            ref="person-tasks-search-field"
-            @change="onSearchChange"
-            @save="saveSearchQuery"
-            :can-save="true"
-          />
-          <span class="filler"></span>
-          <combobox-number
-            class="flexrow-item zoom-level"
-            :label="$t('schedule.zoom_level')"
-            :options="zoomOptions"
-            v-model="zoomLevel"
-            v-if="isActiveTab('schedule')"
-          />
-          <combobox
-            class="flexrow-item"
-            :label="$t('main.sorted_by')"
-            :options="sortOptions"
-            locale-key-prefix="tasks.fields."
-            v-model="currentSort"
-          />
-        </div>
+          <div ref="search" class="flexrow" v-if="!isActiveTab('calendar')">
+            <search-field
+              ref="person-tasks-search-field"
+              class="search-field flexrow-item"
+              can-save
+              @change="onSearchChange"
+              @save="saveSearchQuery"
+            />
+            <combobox-production
+              v-if="isActiveTab('board')"
+              class="flexrow-item production-field"
+              :label="$t('main.production')"
+              :production-list="productionList"
+              v-model="productionId"
+            />
+            <span class="filler"></span>
+            <combobox-number
+              class="flexrow-item zoom-level mb0"
+              :label="$t('schedule.zoom_level')"
+              :options="zoomOptions"
+              v-model="zoomLevel"
+              v-if="isActiveTab('schedule')"
+            />
+            <combobox
+              class="flexrow-item"
+              :label="$t('main.sorted_by')"
+              :options="sortOptions"
+              locale-key-prefix="tasks.fields."
+              v-model="currentSort"
+            />
+          </div>
 
-        <div ref="query">
-          <div
-            class="query-list"
-            v-show="isActiveTab('todos') || isActiveTab('timesheets')"
-          >
+          <div ref="query" class="query-list" v-if="!isActiveTab('calendar')">
             <search-query-list
               :queries="personTaskSearchQueries"
+              type="person"
               @change-search="changeSearch"
               @remove-search="removeSearchQuery"
             />
           </div>
-        </div>
 
-        <todos-list
-          ref="task-list"
-          :tasks="sortedTasks"
-          :is-loading="isTasksLoading"
-          :is-error="isTasksLoadingError"
-          :selection-grid="personTaskSelectionGrid"
-          @scroll="setPersonTasksScrollPosition"
-          v-if="isActiveTab('todos')"
-        />
-
-        <todos-list
-          ref="done-list"
-          :tasks="displayedPersonDoneTasks"
-          :is-loading="isTasksLoading"
-          :is-error="isTasksLoadingError"
-          :done="true"
-          :selectionGrid="personTaskSelectionGrid"
-          v-if="isActiveTab('done')"
-        />
-
-        <timesheet-list
-          :tasks="loggablePersonTasks"
-          :done-tasks="loggableDoneTasks"
-          :is-loading="isTasksLoading"
-          :is-error="isTasksLoadingError"
-          :time-spent-map="personTimeSpentMap"
-          :time-spent-total="personTimeSpentTotal"
-          :hide-done="personTasksSearchText.length === 0"
-          :hide-day-off="
-            !(isCurrentUserAdmin || this.user.id == this.person.id)
-          "
-          @date-changed="onDateChanged"
-          @time-spent-change="onTimeSpentChange"
-          @set-day-off="onSetDayOff"
-          @unset-day-off="onUnsetDayOff"
-          v-if="isActiveTab('timesheets')"
-        />
-
-        <div v-if="isActiveTab('schedule')">
-          <schedule
-            ref="schedule-widget"
-            :start-date="tasksStartDate"
-            :end-date="tasksEndDate"
-            :hierarchy="scheduleItems"
-            :zoom-level="zoomLevel"
-            :height="scheduleHeight"
+          <todos-list
+            ref="task-list"
+            :empty-text="$t('people.no_task_assigned')"
             :is-loading="isTasksLoading"
-            :is-estimation-linked="true"
-            :with-milestones="false"
-            v-if="scheduleItems.length > 0"
+            :is-error="isTasksLoadingError"
+            :selection-grid="personTaskSelectionGrid"
+            :tasks="sortedTasks"
+            @scroll="setPersonTasksScrollPosition"
+            v-if="isActiveTab('todos')"
           />
-          <div class="has-text-centered" v-else>
-            There is no tasks scheduled for current person.
+
+          <todos-list
+            ref="done-list"
+            :tasks="displayedPersonDoneTasks"
+            :is-loading="isTasksLoading"
+            :is-error="isTasksLoadingError"
+            :done="true"
+            :selection-grid="personTaskSelectionGrid"
+            v-else-if="isActiveTab('done')"
+          />
+
+          <kanban-board
+            :is-loading="isTasksLoading"
+            :is-error="isTasksLoadingError"
+            :statuses="boardStatuses"
+            :tasks="boardTasks"
+            :user="user"
+            :production="selectedProduction"
+            v-else-if="isActiveTab('board')"
+          />
+
+          <user-calendar
+            ref="user-calendar"
+            class="calendar"
+            :days-off="daysOff"
+            :tasks="sortedTasks"
+            v-if="isActiveTab('calendar')"
+          />
+
+          <timesheet-list
+            ref="timesheet-list"
+            :tasks="loggablePersonTasks"
+            :done-tasks="loggableDoneTasks"
+            :is-loading="isTasksLoading"
+            :is-error="isTasksLoadingError"
+            :day-off-error="dayOffError"
+            :time-spent-map="personTimeSpentMap"
+            :time-spent-total="personTimeSpentTotal"
+            :hide-done="personTasksSearchText.length === 0"
+            :hide-day-off="!(isCurrentUserAdmin || user.id === person.id)"
+            @date-changed="onDateChanged"
+            @time-spent-change="onTimeSpentChange"
+            @set-day-off="onSetDayOff"
+            @unset-day-off="onUnsetDayOff"
+            v-else-if="isActiveTab('timesheets') && isCurrentUserManager"
+          />
+
+          <div v-else-if="isActiveTab('schedule')">
+            <schedule
+              ref="schedule-widget"
+              :days-off="daysOff"
+              :start-date="tasksStartDate.clone().add(-3, 'months')"
+              :end-date="tasksEndDate.clone().add(3, 'months')"
+              :hierarchy="scheduleItems"
+              :zoom-level="zoomLevel"
+              :height="scheduleHeight"
+              :is-loading="isTasksLoading"
+              :is-estimation-linked="true"
+              :with-milestones="false"
+              @item-changed="saveTaskScheduleItem"
+              @estimation-changed="event => saveTaskScheduleItem(event.item)"
+              v-if="scheduleItems.length > 0"
+            />
+            <div class="has-text-centered" v-else>
+              {{ $t('main.empty_schedule') }}
+            </div>
           </div>
-        </div>
+        </template>
       </div>
     </div>
     <div class="column side-column" v-if="nbSelectedTasks === 1">
@@ -184,42 +156,66 @@ import moment from 'moment-timezone'
 import firstBy from 'thenby'
 import { mapGetters, mapActions } from 'vuex'
 
-import { formatListMixin } from '@/components/mixins/format'
 import colors from '@/lib/colors'
-import { getFirstStartDate, getLastEndDate, parseDate } from '@/lib/time'
+import { sortTaskStatuses } from '@/lib/sorting'
+import {
+  daysToMinutes,
+  getBusinessDays,
+  getFirstStartDate,
+  getLastEndDate,
+  parseDate
+} from '@/lib/time'
 
-import Combobox from '@/components/widgets/Combobox'
-import ComboboxNumber from '@/components/widgets/ComboboxNumber'
-import PeopleAvatar from '@/components/widgets/PeopleAvatar'
-import Schedule from '@/components/pages/schedule/Schedule'
-import SearchField from '@/components/widgets/SearchField'
-import SearchQueryList from '@/components/widgets/SearchQueryList'
-import TimesheetList from '@/components/lists/TimesheetList'
-import TodosList from '@/components/lists/TodosList'
-import TaskInfo from '@/components/sides/TaskInfo'
+import { formatListMixin } from '@/components/mixins/format'
+
+import Combobox from '@/components/widgets/Combobox.vue'
+import ComboboxNumber from '@/components/widgets/ComboboxNumber.vue'
+import ComboboxProduction from '@/components/widgets/ComboboxProduction.vue'
+import KanbanBoard from '@/components/lists/KanbanBoard.vue'
+import PeopleAvatar from '@/components/widgets/PeopleAvatar.vue'
+import RouteSectionTabs from '@/components/widgets/RouteSectionTabs.vue'
+import Schedule from '@/components/widgets/Schedule.vue'
+import SearchField from '@/components/widgets/SearchField.vue'
+import SearchQueryList from '@/components/widgets/SearchQueryList.vue'
+import TimesheetList from '@/components/lists/TimesheetList.vue'
+import TodosList from '@/components/lists/TodosList.vue'
+import TaskInfo from '@/components/sides/TaskInfo.vue'
+import UserCalendar from '@/components/widgets/UserCalendar.vue'
 
 export default {
   name: 'person',
+
   mixins: [formatListMixin],
+
   components: {
     Combobox,
     ComboboxNumber,
+    ComboboxProduction,
+    KanbanBoard,
     PeopleAvatar,
+    RouteSectionTabs,
     Schedule,
     SearchField,
     SearchQueryList,
     TaskInfo,
     TodosList,
-    TimesheetList
+    TimesheetList,
+    UserCalendar
   },
 
   data() {
     return {
       activeTab: 'todos',
       currentSort: 'entity_name',
+      daysOff: [],
+      dayOffError: false,
       isTasksLoading: false,
       isTasksLoadingError: false,
+      loading: {
+        savingSearch: false
+      },
       person: null,
+      productionId: undefined,
       scheduleHeight: 0,
       selectedDate: moment().format('YYYY-MM-DD'),
       sortOptions: [
@@ -244,11 +240,12 @@ export default {
   mounted() {
     this.updateActiveTab()
     if (this.personTasksSearchText.length > 0) {
-      this.searchField.setValue(this.personTasksSearchText)
+      this.searchField?.setValue(this.personTasksSearchText)
     }
     setTimeout(() => {
-      if (this.searchField) this.searchField.focus()
-    }, 100)
+      this.searchField?.focus()
+      this.$refs['schedule-widget']?.scrollToDate(this.tasksStartDate)
+    }, 300)
     this.loadPerson(this.$route.params.person_id)
     window.addEventListener('resize', this.resetScheduleHeight)
   },
@@ -266,8 +263,10 @@ export default {
     ...mapGetters([
       'displayedPersonTasks',
       'displayedPersonDoneTasks',
+      'getProductionTaskStatuses',
       'isCurrentUserAdmin',
       'isCurrentUserManager',
+      'isCurrentUserSupervisor',
       'nbSelectedTasks',
       'personMap',
       'personTasksScrollPosition',
@@ -276,11 +275,26 @@ export default {
       'personTaskSelectionGrid',
       'personTimeSpentMap',
       'personTimeSpentTotal',
+      'openProductions',
       'productionMap',
       'selectedTasks',
+      'taskStatuses',
       'taskTypeMap',
       'user'
     ]),
+
+    isCurrentUserAllowed() {
+      if (this.isCurrentUserManager || this.user.id === this.person.id) {
+        return true
+      }
+      if (this.isCurrentUserSupervisor) {
+        const isSupervisorInDepartments = this.user.departments.some(
+          department => this.person.departments.includes(department)
+        )
+        return isSupervisorInDepartments
+      }
+      return false
+    },
 
     loggablePersonTasks() {
       return this.displayedPersonTasks.filter(task => {
@@ -363,7 +377,7 @@ export default {
     },
 
     tasksStartDate() {
-      if (this.scheduleItems.length > 0) {
+      if (this.scheduleTasks.length) {
         return getFirstStartDate(this.scheduleTasks)
       } else {
         return moment()
@@ -371,7 +385,7 @@ export default {
     },
 
     tasksEndDate() {
-      if (this.scheduleItems.length > 0) {
+      if (this.scheduleTasks.length) {
         return getLastEndDate(this.scheduleTasks)
       } else {
         return moment().add(15, 'days')
@@ -379,11 +393,7 @@ export default {
     },
 
     scheduleTasks() {
-      let children = []
-      this.scheduleItems.forEach(item => {
-        children = children.concat(item.children)
-      })
-      return children
+      return this.scheduleItems.flatMap(item => item.children)
     },
 
     scheduleItems() {
@@ -415,15 +425,107 @@ export default {
         Object.assign(rootElement, {
           startDate: rootStartDate,
           endDate: rootEndDate,
-          man_days: manDays
+          man_days: manDays,
+          daysOff: this.daysOff
         })
       })
       return rootElements
+    },
+
+    boardTasks() {
+      const tasks = this.sortedTasks.concat(this.displayedPersonDoneTasks)
+      if (this.selectedProduction) {
+        return tasks.filter(
+          task => task.project_id === this.selectedProduction.id
+        )
+      }
+      return tasks
+    },
+
+    boardStatuses() {
+      if (this.selectedProduction) {
+        return this.getBoardStatusesByProduction(this.selectedProduction)
+      }
+
+      const productionsByStatus = {}
+      this.userOpenProductions.forEach(production => {
+        const statuses = this.getBoardStatusesByProduction(production)
+        statuses.forEach(status => {
+          if (!productionsByStatus[status.id]) {
+            productionsByStatus[status.id] = []
+          }
+          productionsByStatus[status.id].push(production.id)
+        })
+      })
+
+      return this.taskStatuses
+        .filter(status => !status.for_concept)
+        .map(status => ({
+          ...status,
+          productions: productionsByStatus[status.id] || []
+        }))
+        .filter(status => status.productions.length > 0)
+        .sort((a, b) => a.priority - b.priority)
+    },
+
+    productionList() {
+      return [{ name: this.$t('main.all') }, ...this.userOpenProductions]
+    },
+
+    selectedProduction() {
+      return this.productionMap.get(this.productionId)
+    },
+
+    userOpenProductions() {
+      if (!this.person) {
+        return []
+      }
+      return this.openProductions.filter(production =>
+        production.team.includes(this.person.id)
+      )
+    },
+
+    todoTabs() {
+      const hasAvailableBoard = this.openProductions.some(
+        production => this.getBoardStatusesByProduction(production).length
+      )
+      return [
+        {
+          label: this.$t('main.tasks'),
+          name: 'todos'
+        },
+        hasAvailableBoard
+          ? {
+              label: this.$t('board.title'),
+              name: 'board'
+            }
+          : undefined,
+        {
+          label: this.$t('tasks.calendar'),
+          name: 'calendar'
+        },
+        {
+          label: this.$t('schedule.title'),
+          name: 'schedule'
+        },
+        {
+          label: `${this.$t('tasks.validated')} (${
+            this.displayedPersonDoneTasks.length
+          })`,
+          name: 'done'
+        },
+        {
+          label: this.$t('timesheets.title'),
+          name: 'timesheets'
+        }
+      ].filter(Boolean)
     }
   },
 
   methods: {
     ...mapActions([
+      'clearSelectedTasks',
+      'loadAggregatedPersonDaysOff',
       'loadPersonTasks',
       'setPersonTasksSearch',
       'savePersonTasksSearch',
@@ -431,22 +533,27 @@ export default {
       'setDayOff',
       'setPersonTasksScrollPosition',
       'setTimeSpent',
-      'unsetDayOff'
+      'unsetDayOff',
+      'updateTask'
     ]),
+
+    onAssignation(eventData) {
+      if (this.person.id === eventData.person_id) {
+        this.loadPerson(this.person.id)
+      }
+    },
 
     resetScheduleHeight() {
       this.$nextTick(() => {
         if (this.isActiveTab('schedule')) {
-          const pageHeight = this.$refs.page.offsetHeight
-          const headerHeight = this.$refs.header.offsetHeight
-          const tabsHeight = this.$refs.tabs.offsetHeight
-          const searchHeight = this.$refs.search.offsetHeight
-          const queryHeight = this.$refs.query.offsetHeight
+          const pageHeight = this.$refs.page?.offsetHeight || 0
+          const headerHeight = this.$refs.header?.offsetHeight || 0
+          const tabsHeight = this.$refs.tabs?.offsetHeight || 0
+          const searchHeight = this.$refs.search?.offsetHeight || 0
+          const queryHeight = this.$refs.query?.offsetHeight || 0
           this.scheduleHeight =
             pageHeight - headerHeight - tabsHeight - searchHeight - queryHeight
-          if (this.$refs['schedule-widget']) {
-            this.$refs['schedule-widget'].resetScheduleSize()
-          }
+          this.$refs['schedule-widget']?.resetScheduleSize()
         }
       })
     },
@@ -473,8 +580,9 @@ export default {
         !task.real_start_date &&
         !task.due_date &&
         !task.end_date
-      )
+      ) {
         return null
+      }
 
       if (task.start_date) {
         startDate = parseDate(task.start_date)
@@ -482,7 +590,7 @@ export default {
         startDate = parseDate(task.real_start_date)
       }
 
-      const estimation = this.formatDuration(task.estimation)
+      const estimation = task.estimation
       if (task.due_date) {
         endDate = parseDate(task.due_date)
       } else if (task.end_date) {
@@ -490,14 +598,14 @@ export default {
       } else if (task.estimation) {
         endDate = startDate.clone().add(estimation, 'days')
       }
-
       if (!endDate || endDate.isBefore(startDate)) {
         endDate = startDate.clone().add(1, 'days')
       }
+
       const taskType = this.taskTypeMap.get(task.task_type_id)
       return {
         ...task,
-        name: task.full_entity_name + ' / ' + taskType.name,
+        name: `${task.full_entity_name} / ${taskType.name}`,
         startDate,
         endDate,
         expanded: false,
@@ -515,90 +623,112 @@ export default {
       return this.activeTab === tab
     },
 
-    selectTab(tab) {
-      this.activeTab = tab
-      if (this.isActiveTab('todos')) {
-        setTimeout(() => {
-          if (this.searchField) this.searchField.focus()
-        }, 100)
-      }
-    },
-
     onSearchChange(text) {
       this.setPersonTasksSearch(text)
     },
 
-    loadPerson(personId) {
+    async loadPerson(personId) {
       this.person = this.personMap.get(personId)
+
+      if (!this.person) {
+        this.$router.push({ name: 'not-found' })
+        return
+      }
+
+      if (this.person.is_bot || !this.isCurrentUserAllowed) {
+        return
+      }
+
       this.isTasksLoading = true
+      this.isTasksLoadingError = false
+
       this.loadPersonTasks({
         personId: this.person.id,
-        date: this.selectedDate,
-        callback: err => {
-          if (err) console.error(err)
-          this.isTasksLoading = false
-          this.isTasksLoadingError = false
+        date: this.selectedDate
+      })
+        .then(() => {
           setTimeout(() => {
-            if (this.taskList) {
-              this.$nextTick(() => {
-                this.taskList.setScrollPosition(this.personTasksScrollPosition)
-              })
-            }
+            this.$nextTick(() => {
+              this.taskList?.setScrollPosition(this.personTasksScrollPosition)
+            })
             this.resizeHeaders()
           }, 0)
-        }
-      })
+        })
+        .catch(err => {
+          console.error(err)
+          this.isTasksLoadingError = true
+        })
+        .finally(() => {
+          this.isTasksLoading = false
+        })
+
+      try {
+        this.daysOff = await this.loadAggregatedPersonDaysOff({ personId })
+      } catch (error) {
+        console.error(error)
+      }
     },
 
     resizeHeaders() {
       this.$nextTick(() => {
-        if (this.taskList) this.taskList.resizeHeaders()
-        if (this.haveDoneList) this.haveDoneList.resizeHeaders()
+        this.taskList?.resizeHeaders()
+        this.haveDoneList?.resizeHeaders()
       })
     },
 
-    selectCurrent() {
-      this.activeTab = 'current'
-      setTimeout(() => {
-        this.$refs['person-tasks-search-field'].focus()
-      }, 100)
-    },
-
-    selectDone() {
-      this.activeTab = 'done'
-    },
-
     changeSearch(searchQuery) {
-      this.$refs['person-tasks-search-field'].setValue(searchQuery.search_query)
-      this.$refs['person-tasks-search-field'].$emit(
-        'change',
-        searchQuery.search_query
-      )
+      this.searchField?.setValue(searchQuery.search_query)
+      this.onSearchChange(searchQuery.search_query)
     },
 
     saveSearchQuery(searchQuery) {
+      if (this.loading.savingSearch) {
+        return
+      }
+      this.loading.savingSearch = true
       this.savePersonTasksSearch(searchQuery)
-        .then(() => {})
-        .catch(err => {
-          if (err) console.error(err)
+        .catch(console.error)
+        .finally(() => {
+          this.loading.savingSearch = false
         })
     },
 
     removeSearchQuery(searchQuery) {
-      this.removePersonTasksSearch(searchQuery)
-        .then(() => {})
-        .catch(err => {
-          if (err) console.error(err)
-        })
+      this.removePersonTasksSearch(searchQuery).catch(err => {
+        if (err) console.error(err)
+      })
     },
 
     updateActiveTab() {
-      const availableTabs = ['done', 'timesheets', 'schedule']
-      if (availableTabs.includes(this.$route.params.tab)) {
-        this.activeTab = this.$route.params.tab
-      } else {
-        this.activeTab = 'todos'
+      const availableSections = [
+        'board',
+        'calendar',
+        'done',
+        'schedule',
+        'timesheets'
+      ]
+      const currentSection = this.$route.query.section
+      this.activeTab = availableSections.includes(currentSection)
+        ? currentSection
+        : 'todos'
+
+      if (this.activeTab === 'board') {
+        const currentProduction = this.userOpenProductions.find(
+          ({ id }) => id === this.$route.query.productionId
+        )
+        if (currentProduction) {
+          this.productionId = currentProduction.id
+        } else {
+          this.$router.push({
+            query: {
+              productionId: this.productionId,
+              section: this.activeTab
+            }
+          })
+        }
       }
+
+      this.clearSelectedTasks()
     },
 
     onTimeSpentChange(timeSpentInfo) {
@@ -612,26 +742,63 @@ export default {
       this.loadPerson(this.person.id)
     },
 
-    onSetDayOff() {
-      const dayOff = {
-        personId: this.person.id,
-        date: this.selectedDate
+    async onSetDayOff(dayOff) {
+      this.dayOffError = false
+      try {
+        await this.setDayOff({
+          ...dayOff,
+          personId: this.person.id
+        })
+        this.$refs['timesheet-list']?.closeSetDayOffModal()
+      } catch (error) {
+        this.dayOffError = error.body?.message || true
       }
-      this.setDayOff(dayOff)
     },
 
-    onUnsetDayOff() {
-      const dayOff = {
-        personId: this.person.id,
-        date: this.selectedDate
+    async onUnsetDayOff() {
+      this.dayOffError = false
+      try {
+        await this.unsetDayOff()
+        this.$refs['timesheet-list']?.closeUnsetDayOffModal()
+      } catch (error) {
+        this.dayOffError = error.body?.message || true
       }
-      this.unsetDayOff(dayOff)
+    },
+
+    saveTaskScheduleItem(item) {
+      const daysLength = getBusinessDays(item.startDate, item.endDate)
+      const estimation = daysToMinutes(this.organisation, daysLength)
+      item.man_days = estimation
+      if (item.startDate && item.endDate) {
+        this.updateTask({
+          taskId: item.id,
+          data: {
+            estimation,
+            start_date: item.startDate.format('YYYY-MM-DD'),
+            due_date: item.endDate.format('YYYY-MM-DD')
+          }
+        })
+      }
+    },
+
+    getBoardStatusesByProduction(production) {
+      const statuses = this.getProductionTaskStatuses(production.id).filter(
+        status => {
+          if (status.for_concept) {
+            return false
+          }
+          const roles_for_board =
+            production.task_statuses_link?.[status.id]?.roles_for_board
+          return roles_for_board?.includes(this.user.role)
+        }
+      )
+      return sortTaskStatuses(statuses, production)
     }
   },
 
   metaInfo() {
     return {
-      title: this.person ? `${this.person.name} - Kitsu` : '... - Kitsu'
+      title: `${this.person?.name || '...'} - Kitsu`
     }
   },
 
@@ -647,6 +814,38 @@ export default {
 
     activeTab() {
       this.resetScheduleHeight()
+      this.$nextTick(() => {
+        this.$refs['schedule-widget']?.scrollToDate(this.tasksStartDate)
+      })
+    },
+
+    '$route.query.section'() {
+      this.updateActiveTab()
+    },
+
+    productionId() {
+      this.$router.push({
+        query: {
+          productionId: this.productionId,
+          tab: this.activeTab
+        }
+      })
+    },
+
+    zoomLevel() {
+      this.$refs['schedule-widget']?.scrollToDate(this.tasksStartDate)
+    }
+  },
+
+  socket: {
+    events: {
+      'task:assign'(eventData) {
+        this.onAssignation(eventData)
+      },
+
+      'task:unassign'(eventData) {
+        this.onAssignation(eventData)
+      }
     }
   }
 }
@@ -674,8 +873,12 @@ export default {
   width: 250px;
 }
 
+.search-field {
+  margin: 25px 2em 5px 0;
+}
+
 .query-list {
-  margin-top: 1em;
+  margin-top: 0.5em;
 }
 
 .task-tabs {
@@ -688,10 +891,6 @@ export default {
 
 .data-list {
   margin-top: 0;
-}
-
-.dark .main-column {
-  border-right: 3px solid $grey-strong;
 }
 
 .person {
@@ -710,7 +909,24 @@ export default {
   padding: 0;
 }
 
-.main-column {
-  border-right: 3px solid $light-grey;
+.zoom-level {
+  margin-top: -0.5em;
+}
+
+.field {
+  margin-bottom: 0;
+}
+
+.tabs {
+  min-height: 30px;
+}
+
+.page-header {
+  margin-top: 0.5em;
+}
+
+.calendar {
+  flex: 1;
+  overflow: auto;
 }
 </style>

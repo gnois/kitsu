@@ -2,9 +2,8 @@
   <div class="login hero is-fullheight">
     <div class="container has-text-centered">
       <div
+        class="box has-text-left"
         :class="{
-          box: true,
-          'has-text-left': true,
           'xyz-out': fadeAway
         }"
         xyz="fade"
@@ -13,12 +12,25 @@
           <img src="../../assets/kitsu-text-dark.svg" v-if="isDarkTheme" />
           <img src="../../assets/kitsu-text.svg" v-else />
         </div>
-        <form>
-          <div class="field mt2" v-show="!(isMissingOTP || isWrongOTP)">
+        <form v-if="!(isMissingOTP || isWrongOTP)">
+          <div class="field" v-if="mainConfig?.saml_enabled">
+            <p class="control">
+              <a
+                class="button is-fullwidth"
+                :class="{
+                  'is-loading': isLoginLoading
+                }"
+                href="/api/auth/saml/login"
+              >
+                {{ loginSAMLButtonInfo }}
+              </a>
+            </p>
+          </div>
+          <div class="field mt2">
             <p class="control has-icon">
               <input
                 class="input is-medium email"
-                type="text"
+                type="email"
                 :placeholder="$t('login.fields.email')"
                 @input="updateEmail"
                 @keyup.enter="confirmLogIn"
@@ -26,11 +38,11 @@
                 v-focus
               />
               <span class="icon">
-                <mail-icon width="20" height="20" />
+                <mail-icon :size="20" />
               </span>
             </p>
           </div>
-          <div class="field" v-show="!(isMissingOTP || isWrongOTP)">
+          <div class="field">
             <p class="control has-icon">
               <input
                 class="input is-medium password"
@@ -41,7 +53,7 @@
                 v-model="password"
               />
               <span class="icon">
-                <lock-icon width="20" height="20" />
+                <lock-icon :size="20" />
               </span>
             </p>
           </div>
@@ -58,10 +70,8 @@
         />
         <p v-if="!(isMissingOTP || isWrongOTP)" class="control">
           <a
+            class="button main-button is-fullwidth"
             :class="{
-              button: true,
-              'main-button': true,
-              'is-fullwidth': true,
               'is-loading': isLoginLoading
             }"
             @click="confirmLogIn"
@@ -69,7 +79,10 @@
             {{ $t('login.login') }}
           </a>
         </p>
-        <p class="control error" v-if="isTooMuchLoginFailedAttemps">
+        <p class="control error" v-if="isServerError">
+          {{ $t('login.login_server_failed') }}
+        </p>
+        <p class="control error" v-else-if="isTooMuchLoginFailedAttemps">
           {{ $t('login.too_many_failed_login_attemps') }}
         </p>
         <p
@@ -91,7 +104,7 @@
 
 <script>
 import { mapGetters, mapActions } from 'vuex'
-import { MailIcon, LockIcon } from 'vue-feather-icons'
+import { MailIcon, LockIcon } from 'lucide-vue'
 
 import TwoFactorAuthentication from '@/components/widgets/TwoFactorAuthentication.vue'
 
@@ -111,6 +124,7 @@ export default {
       isTooMuchLoginFailedAttemps: false,
       isWrongOTP: false,
       isMissingOTP: false,
+      isServerError: false,
       preferredTwoFA: '',
       TwoFAsEnabled: [],
       fadeAway: false
@@ -124,7 +138,22 @@ export default {
   },
 
   computed: {
-    ...mapGetters(['isDarkTheme', 'isLoginLoading', 'isLoginError'])
+    ...mapGetters([
+      'isDarkTheme',
+      'isLoginLoading',
+      'isLoginError',
+      'mainConfig'
+    ]),
+
+    loginSAMLButtonInfo() {
+      if (this.mainConfig?.saml_idp_name) {
+        return this.$t('login.login_with_saml', {
+          saml_idp_name: this.mainConfig.saml_idp_name
+        })
+      } else {
+        return this.$t('login.saml')
+      }
+    }
   },
 
   methods: {
@@ -142,6 +171,7 @@ export default {
       this.isTooMuchLoginFailedAttemps = false
       this.isWrongOTP = false
       this.isMissingOTP = false
+      this.isServerError = false
       this.logIn({
         twoFactorPayload: twoFactorPayload,
         callback: (err, success) => {
@@ -159,6 +189,8 @@ export default {
               this.isMissingOTP = true
               this.preferredTwoFA = err.preferred_two_factor_authentication
               this.TwoFAsEnabled = err.two_factor_authentication_enabled
+            } else if (err.server_error) {
+              this.isServerError = true
             } else {
               console.error(err)
             }
@@ -234,6 +266,10 @@ export default {
 
 .icon {
   padding: 0.25em;
+}
+
+.error {
+  text-align: center;
 }
 
 @media (max-width: 1600px) {

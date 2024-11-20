@@ -1,35 +1,38 @@
 import client from '@/store/api/client'
 
+import { buildQueryString } from '../../lib/query'
+
 export default {
-  getTask(taskId, callback) {
+  getTask(taskId) {
     return client.pget(`/api/data/tasks/${taskId}/full`)
   },
 
-  updateTask(taskId, data, callback) {
-    return client.pput(`/api/data/tasks/${taskId}`, data, callback)
+  getOpenTasks(filters) {
+    const path = '/api/data/tasks/open-tasks'
+    return client.pget(buildQueryString(path, filters))
   },
 
-  getTaskStatuses(callback) {
-    client.get('/api/data/task-status', callback)
+  updateTask(taskId, data) {
+    return client.pput(`/api/data/tasks/${taskId}`, data)
   },
 
-  getTaskSubscribed(taskId, callback) {
+  getTaskSubscribed(taskId) {
     return client.pget(`/api/data/user/tasks/${taskId}/subscribed`)
   },
 
-  subscribeToTask(taskId, callback) {
+  subscribeToTask(taskId) {
     return client.ppost(`/api/actions/user/tasks/${taskId}/subscribe`, {})
   },
 
-  unsubscribeFromTask(taskId, callback) {
+  unsubscribeFromTask(taskId) {
     return client.pdel(`/api/actions/user/tasks/${taskId}/unsubscribe`)
   },
 
-  getTaskComments(taskId, callback) {
+  getTaskComments(taskId) {
     return client.pget(`/api/data/tasks/${taskId}/comments`)
   },
 
-  getTaskPreviews(taskId, callback) {
+  getTaskPreviews(taskId) {
     return client.pget(`/api/data/tasks/${taskId}/previews`)
   },
 
@@ -37,14 +40,13 @@ export default {
     let commentData = {
       task_status_id: data.taskStatusId,
       comment: data.comment,
-      checklist: data.checklist || []
+      checklist: data.checklist || [],
+      links: data.links
     }
-    if (data.attachment && data.attachment.length > 0) {
+    if (data.attachment?.length) {
       commentData = new FormData()
-      let i = 0
-      data.attachment.forEach(attachment => {
-        commentData.append('file-' + i, attachment.get('file'))
-        i++
+      data.attachment.forEach((attachment, index) => {
+        commentData.append(`file-${index}`, attachment.get('file'))
       })
       commentData.set('task_status_id', data.taskStatusId)
       commentData.set('comment', data.comment)
@@ -59,10 +61,8 @@ export default {
   addAttachmentToComment(comment, files) {
     const attachments = new FormData()
     const taskId = comment.object_id
-    let i = 0
-    files.forEach(attachment => {
-      attachments.append('file-' + i, attachment.get('file'))
-      i++
+    files.forEach((attachment, index) => {
+      attachments.append(`file-${index}`, attachment.get('file'))
     })
     return client.ppost(
       `/api/actions/tasks/${taskId}/comments/${comment.id}/add-attachment`,
@@ -72,8 +72,7 @@ export default {
 
   deleteAttachment(comment, attachment) {
     return client.pdel(
-      `/api/data/tasks/${comment.object_id}/comments/${comment.id}/` +
-        `attachments/${attachment.id}`
+      `/api/data/tasks/${comment.object_id}/comments/${comment.id}/attachments/${attachment.id}`
     )
   },
 
@@ -85,19 +84,20 @@ export default {
   },
 
   getTaskComment(data) {
-    return client.pget(`/api/data/comments/${data.id}`)
+    return client.pget(`/api/data/comments/${data.id}?relations=true`)
   },
 
-  editTaskComment(comment, callback) {
-    const commentData = {
+  editTaskComment(comment) {
+    const data = {
       text: comment.text,
       task_status_id: comment.task_status_id,
-      checklist: comment.checklist
+      checklist: comment.checklist,
+      links: comment.links
     }
-    return client.pput(`/api/data/comments/${comment.id}`, commentData)
+    return client.pput(`/api/data/comments/${comment.id}`, data)
   },
 
-  deleteTaskComment(taskId, commentId, callback) {
+  deleteTaskComment(taskId, commentId) {
     return client.pdel(`/api/data/tasks/${taskId}/comments/${commentId}`)
   },
 
@@ -106,15 +106,9 @@ export default {
     const type = data.type
     const projectId = data.project_id
     const entityIds = data.entityIds
-    let url =
-      `/api/actions/projects/${projectId}/task-types/${taskTypeId}/${type}/` +
-      'create-tasks'
-    if (['episodes', 'sequences'].includes(data.type)) {
-      url =
-        `/api/actions/projects/${projectId}/task-types/` +
-        `${taskTypeId}/create-tasks/` +
-        `${data.type.substring(0, data.type.length - 1)}`
-    }
+    const url = ['episodes', 'sequences'].includes(type)
+      ? `/api/actions/projects/${projectId}/task-types/${taskTypeId}/create-tasks/${type.slice(0, -1)}`
+      : `/api/actions/projects/${projectId}/task-types/${taskTypeId}/${type}/create-tasks`
     return client.ppost(url, entityIds)
   },
 
@@ -123,15 +117,9 @@ export default {
     const taskTypeId = data.task_type_id
     const type = data.type
     const projectId = data.project_id
-    let url =
-      `/api/actions/projects/${projectId}/task-types/${taskTypeId}/${type}/` +
-      `create-tasks?id=${entityId}`
-    if (['episodes', 'sequences'].includes(data.type)) {
-      url =
-        `/api/actions/projects/${projectId}/task-types/` +
-        `${taskTypeId}/create-tasks/` +
-        `${data.type.substring(0, data.type.length - 1)}`
-    }
+    const url = ['episodes', 'sequences'].includes(type)
+      ? `/api/actions/projects/${projectId}/task-types/${taskTypeId}/create-tasks/${type.slice(0, -1)}`
+      : `/api/actions/projects/${projectId}/task-types/${taskTypeId}/${type}/create-tasks?id=${entityId}`
     return client.ppost(url, {})
   },
 
@@ -164,16 +152,14 @@ export default {
 
   addExtraPreview(previewId, taskId, commentId) {
     return client.ppost(
-      `/api/actions/tasks/${taskId}/comments/${commentId}/preview-files/` +
-        `${previewId}`,
+      `/api/actions/tasks/${taskId}/comments/${commentId}/preview-files/${previewId}`,
       {}
     )
   },
 
   deletePreview(taskId, commentId, previewId) {
     return client.pdel(
-      `/api/actions/tasks/${taskId}/comments/${commentId}/preview-files/` +
-        `${previewId}`
+      `/api/actions/tasks/${taskId}/comments/${commentId}/preview-files/${previewId}`
     )
   },
 
@@ -207,12 +193,10 @@ export default {
     return client.pget(`/api/data/preview-files/${previewId}`)
   },
 
-  assignTasks(personId, selectedTaskIds, callback) {
-    client.put(
-      `/api/actions/persons/${personId}/assign`,
-      { task_ids: selectedTaskIds },
-      callback
-    )
+  assignTasks(personId, selectedTaskIds) {
+    return client.pput(`/api/actions/persons/${personId}/assign`, {
+      task_ids: selectedTaskIds
+    })
   },
 
   unassignTasks(selectedTaskIds) {
@@ -246,9 +230,7 @@ export default {
   },
 
   deleteReply(comment, reply) {
-    const path =
-      `/api/data/tasks/${comment.object_id}` +
-      `/comments/${comment.id}/reply/${reply.id}`
+    const path = `/api/data/tasks/${comment.object_id}/comments/${comment.id}/reply/${reply.id}`
     return client.pdel(path)
   },
 

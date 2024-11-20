@@ -13,21 +13,42 @@
           {{ $t('main.search_query_edit') }}
         </h1>
 
-        <form v-on:submit.prevent>
+        <form @submit.prevent>
           <text-field
             ref="nameField"
             :label="$t('assets.fields.name')"
-            v-model="form.name"
+            v-model.trim="form.name"
             @enter="runConfirmation"
             v-focus
           />
 
           <text-field
-            ref="nameField"
             :label="$t('main.search_query')"
-            v-model="form.search_query"
+            v-model.trim="form.search_query"
             @enter="runConfirmation"
-            v-focus
+          />
+
+          <boolean-field
+            :label="$t('main.is_shared')"
+            v-model="form.is_shared"
+            @click="form.search_filter_group_id = null"
+            v-if="isCurrentUserManager && currentProduction"
+          />
+
+          <combobox-department
+            class="mt2"
+            :label="$t('main.department')"
+            :top="true"
+            v-model="form.department_id"
+            v-if="form.is_shared === 'true'"
+          />
+
+          <combobox
+            class="mt2"
+            :label="$t('main.filter_group')"
+            :options="allowedGroups"
+            v-model="form.search_filter_group_id"
+            v-if="isGroupEnabled && allowedGroups.length > 1"
           />
         </form>
 
@@ -48,15 +69,25 @@
  * Modal used to edit search filter information. Users prefer to rename the
    filter label when it's too complex to read or too long.
  */
+import { mapGetters } from 'vuex'
+
 import { modalMixin } from '@/components/modals/base_modal'
 
-import TextField from '@/components/widgets/TextField'
-import ModalFooter from '@/components/modals/ModalFooter'
+import BooleanField from '@/components/widgets/BooleanField.vue'
+import Combobox from '@/components/widgets/Combobox.vue'
+import ComboboxDepartment from '@/components/widgets/ComboboxDepartment.vue'
+import ModalFooter from '@/components/modals/ModalFooter.vue'
+import TextField from '@/components/widgets/TextField.vue'
 
 export default {
   name: 'edit-search-filter-modal',
+
   mixins: [modalMixin],
+
   components: {
+    BooleanField,
+    Combobox,
+    ComboboxDepartment,
     ModalFooter,
     TextField
   },
@@ -70,6 +101,10 @@ export default {
       type: Boolean,
       default: false
     },
+    isGroupEnabled: {
+      type: Boolean,
+      default: false
+    },
     isLoading: {
       type: Boolean,
       default: false
@@ -77,51 +112,74 @@ export default {
     searchQueryToEdit: {
       type: Object,
       default: () => {}
+    },
+    groupOptions: {
+      type: Array,
+      default: () => []
     }
   },
 
   data() {
-    if (this.searchQueryToEdit && this.searchQueryToEdit.id) {
-      return {
-        form: {
-          text: this.searchQueryToEdit.text,
-          task_status_id: this.searchQueryToEdit.task_status_id
-        }
-      }
-    } else {
-      return {
-        form: {
-          text: '',
-          task_status_id: null
-        }
+    return {
+      form: {
+        id: null,
+        name: '',
+        search_filter_group_id: null,
+        search_query: '',
+        is_shared: 'false'
       }
     }
   },
 
-  computed: {},
+  computed: {
+    ...mapGetters(['currentProduction', 'isCurrentUserManager']),
+
+    allowedGroups() {
+      return this.groupOptions.filter(
+        group =>
+          group.is_shared === (this.form.is_shared === 'true') ||
+          group.value === null
+      )
+    }
+  },
 
   methods: {
     runConfirmation(event) {
+      if (!this.form.name.length) {
+        this.$refs.nameField.focus()
+        return
+      }
+
       if (!event || event.keyCode === 13 || !event.keyCode) {
-        this.$emit('confirm', {
+        const data = {
           id: this.searchQueryToEdit.id,
-          ...this.form
-        })
+          ...this.form,
+          is_shared: this.form.is_shared === 'true'
+        }
+        this.$emit('confirm', data)
       }
     }
   },
 
   watch: {
     searchQueryToEdit() {
-      if (this.searchQueryToEdit && this.searchQueryToEdit.id) {
-        this.form.id = this.searchQueryToEdit.id
-        this.form.name = this.searchQueryToEdit.name
-        this.form.search_query = this.searchQueryToEdit.search_query
+      if (this.searchQueryToEdit?.id) {
+        this.form = {
+          id: this.searchQueryToEdit.id,
+          name: this.searchQueryToEdit.name,
+          search_filter_group_id: this.searchQueryToEdit.search_filter_group_id,
+          search_query: this.searchQueryToEdit.search_query,
+          is_shared: this.searchQueryToEdit.is_shared ? 'true' : 'false',
+          department_id: this.searchQueryToEdit.department_id
+        }
       } else {
         this.form = {
-          id: '',
+          id: null,
           name: '',
-          search_query: ''
+          search_filter_group_id: null,
+          search_query: '',
+          is_shared: 'false',
+          department_id: null
         }
       }
     },
@@ -136,5 +194,3 @@ export default {
   }
 }
 </script>
-
-<style lang="scss" scoped></style>

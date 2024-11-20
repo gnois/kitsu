@@ -3,11 +3,20 @@
     <list-page-header
       :title="$t('task_types.title')"
       :new-entry-label="$t('task_types.new_task_type')"
+      :is-exportable="isActiveTab"
+      @export-clicked="onExportClicked"
       @new-clicked="onNewClicked"
     />
 
+    <route-tabs
+      class="mt2"
+      :active-tab="activeTab"
+      :tabs="tabs"
+      route-name="task-types"
+    />
+
     <task-type-list
-      :entries="taskTypes"
+      :entries="listTaskTypes"
       :is-loading="loading.taskTypes || loading.departments"
       :is-error="errors.taskTypes || errors.departments"
       @update-priorities="updatePriorities"
@@ -39,11 +48,16 @@
 
 <script>
 import { mapGetters, mapActions } from 'vuex'
+
+import csv from '@/lib/csv'
 import func from '@/lib/func'
-import DeleteModal from '@/components/modals/DeleteModal'
-import EditTaskTypeModal from '@/components/modals/EditTaskTypeModal'
-import ListPageHeader from '@/components/widgets/ListPageHeader'
-import TaskTypeList from '@/components/lists/TaskTypeList'
+import stringHelpers from '@/lib/string'
+
+import DeleteModal from '@/components/modals/DeleteModal.vue'
+import EditTaskTypeModal from '@/components/modals/EditTaskTypeModal.vue'
+import ListPageHeader from '@/components/widgets/ListPageHeader.vue'
+import RouteTabs from '@/components/widgets/RouteTabs.vue'
+import TaskTypeList from '@/components/lists/TaskTypeList.vue'
 
 export default {
   name: 'task-types',
@@ -52,11 +66,13 @@ export default {
     DeleteModal,
     EditTaskTypeModal,
     ListPageHeader,
+    RouteTabs,
     TaskTypeList
   },
 
   data() {
     return {
+      activeTab: 'active',
       errors: {
         taskTypes: false,
         departments: false,
@@ -73,16 +89,44 @@ export default {
         del: false,
         edit: false
       },
+      tabs: [
+        {
+          name: 'active',
+          label: this.$t('main.active')
+        },
+        {
+          name: 'archived',
+          label: this.$t('main.archived')
+        }
+      ],
       taskTypeToDelete: { color: '#999999' },
       taskTypeToEdit: null
     }
   },
 
   computed: {
-    ...mapGetters(['getTaskType', 'taskTypes'])
+    ...mapGetters([
+      'archivedTaskTypes',
+      'departmentMap',
+      'getTaskType',
+      'taskTypes'
+    ]),
+
+    isActiveTab() {
+      return this.activeTab === 'active'
+    },
+
+    listTaskTypes() {
+      const taskTypes = this.isActiveTab
+        ? this.taskTypes
+        : this.archivedTaskTypes
+
+      return taskTypes.filter(taskType => taskType.for_entity !== 'Concept')
+    }
   },
 
   mounted() {
+    this.activeTab = this.$route.query.tab || 'active'
     this.loading.taskTypes = true
     this.errors.taskTypes = false
     this.loading.departments = true
@@ -192,13 +236,42 @@ export default {
       this.modals.edit = true
     },
 
+    onExportClicked() {
+      const name = stringHelpers.slugify(this.$t('task_types.title'))
+      const headers = [
+        this.$t('main.type'),
+        this.$t('task_types.fields.dedicated_to'),
+        this.$t('task_types.fields.department'),
+        this.$t('task_types.fields.name'),
+        this.$t('task_types.fields.description'),
+        this.$t('task_types.fields.color'),
+        this.$t('task_types.fields.allow_timelog')
+      ]
+      const entries = [headers].concat(
+        this.taskTypes.map(taskType => [
+          taskType.type,
+          taskType.for_entity,
+          this.departmentMap.get(taskType.department_id)?.name,
+          taskType.name,
+          taskType.description,
+          taskType.color,
+          taskType.allow_timelog
+        ])
+      )
+      csv.buildCsvFile(name, entries)
+    },
+
     onNewClicked() {
       this.taskTypeToEdit = { color: '#999999' }
       this.modals.edit = true
     }
   },
 
-  watch: {},
+  watch: {
+    $route() {
+      this.activeTab = this.$route.query.tab || 'active'
+    }
+  },
 
   metaInfo() {
     return {
@@ -207,5 +280,3 @@ export default {
   }
 }
 </script>
-
-<style lang="scss" scoped></style>

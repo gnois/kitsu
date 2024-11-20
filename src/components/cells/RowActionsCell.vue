@@ -7,7 +7,7 @@
       @click="$emit('history-clicked')"
       v-if="!hideHistory"
     >
-      <clock-icon class="icon is-small only-icon" />
+      <clock-icon class="icon is-small" />
     </button>
 
     <button
@@ -17,7 +17,17 @@
       @click="$emit('edit-clicked')"
       v-if="!hideEdit && !entry.canceled"
     >
-      <edit-icon class="icon is-small only-icon" />
+      <edit-icon class="icon is-small" />
+    </button>
+
+    <button
+      class="button"
+      data-test="button-avatar"
+      tabindex="-1"
+      @click="$emit('avatar-clicked')"
+      v-if="!hideAvatar"
+    >
+      <camera-icon class="icon is-small" />
     </button>
 
     <button
@@ -27,7 +37,7 @@
       @click="$emit('change-password-clicked')"
       v-if="!hideChangePassword && !entry.canceled && isCurrentUserAdmin"
     >
-      <key-icon class="icon is-small only-icon" />
+      <key-icon class="icon is-small" />
     </button>
 
     <button
@@ -37,7 +47,7 @@
       @click="$emit('restore-clicked')"
       v-if="entry.canceled"
     >
-      <rotate-ccw-icon class="icon is-small only-icon" />
+      <rotate-ccw-icon class="icon is-small" />
     </button>
 
     <button
@@ -47,7 +57,7 @@
       @click="$emit('delete-clicked')"
       v-if="!hideDelete && !entry.canceled && isCurrentUserAdmin"
     >
-      <trash-icon class="icon is-small only-icon" />
+      <trash-icon class="icon is-small" />
     </button>
 
     <button
@@ -57,27 +67,42 @@
       @click="$emit('delete-clicked')"
       v-else-if="!hideDelete"
     >
-      <trash-icon class="icon is-small only-icon" />
+      <trash-icon class="icon is-small" />
+    </button>
+
+    <button
+      class="button"
+      data-test="button-refresh"
+      tabindex="-1"
+      @click="$emit('refresh-clicked')"
+      v-else-if="!hideRefresh"
+    >
+      <refresh-cw-icon class="icon is-small" />
     </button>
   </td>
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
+import { mapGetters } from 'vuex'
 import {
+  CameraIcon,
   ClockIcon,
   EditIcon,
   KeyIcon,
+  RefreshCwIcon,
   RotateCcwIcon,
   TrashIcon
-} from 'vue-feather-icons'
+} from 'lucide-vue'
 
 export default {
   name: 'row-actions-cell',
+
   components: {
+    CameraIcon,
     ClockIcon,
     EditIcon,
     KeyIcon,
+    RefreshCwIcon,
     RotateCcwIcon,
     TrashIcon
   },
@@ -89,11 +114,19 @@ export default {
         return {}
       }
     },
-    hideEdit: {
+    hideAvatar: {
+      type: Boolean,
+      default: true
+    },
+    hideChangePassword: {
+      type: Boolean,
+      default: true
+    },
+    hideDelete: {
       type: Boolean,
       default: false
     },
-    hideDelete: {
+    hideEdit: {
       type: Boolean,
       default: false
     },
@@ -101,16 +134,14 @@ export default {
       type: Boolean,
       default: true
     },
-    hideChangePassword: {
+    hideRefresh: {
       type: Boolean,
       default: true
     }
   },
+
   computed: {
     ...mapGetters(['isCurrentUserAdmin'])
-  },
-  methods: {
-    ...mapActions([])
   }
 }
 </script>

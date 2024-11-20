@@ -18,6 +18,7 @@ const EQUAL_PRIORITY_REGEX = /priority-\[([^[]*)\]=\d|priority-([^ ]*)=\d/g
 const EQUAL_ASSETS_READY_REGEX =
   /assetsready=\[([^[]*)\]|assetsready=([^ ]*)|assetsready=([^ ]*)/g
 const MULTIPLE_REGEX = /\[([^[]*)\]/g
+const EQUAL_ASSIGNATION_REGEX = /assignedto\[([^[]*)\]=\[([^[]*)\]/g
 
 /*
  * Look in the search query for task type filter like anim=wip.
@@ -59,25 +60,27 @@ const applyFiltersFunctions = {
 
   assignedto(entry, filter, taskMap) {
     let isOk = false
-    if (entry.tasks) {
-      entry.tasks.forEach(taskId => {
-        const task = taskMap.get(taskId)
-        isOk = isOk || task.assignees.includes(filter.personId)
-      })
+    if (filter.taskType) {
+      const taskId = entry.validations.get(filter.taskType.id)
+      const task = taskMap.get(taskId)
+      isOk = task?.assignees.includes(filter.personId)
+    } else {
+      isOk =
+        entry.tasks?.some(taskId => {
+          const task = taskMap.get(taskId)
+          return task?.assignees.includes(filter.personId)
+        }) ?? false
     }
-    if (filter.excluding) isOk = !isOk
-    return isOk
+    return filter.excluding ? !isOk : isOk
   },
 
   descriptor(entry, filter, taskMap) {
     let isOk = false
-    if (
-      entry.data &&
-      entry.data[filter.descriptor.field_name] &&
-      filter.values
-    ) {
-      let dataValue = entry.data[filter.descriptor.field_name]
-      dataValue = dataValue.toLowerCase()
+    let dataValue = entry.data?.[filter.descriptor.field_name]
+    if ((dataValue || dataValue === 0) && filter.values) {
+      if (typeof dataValue === 'string') dataValue = dataValue.toLowerCase()
+
+      // Checklist case
       if (
         filter.values.length === 1 &&
         filter.values[0].match(new RegExp('(:true)|(:false)$'))
@@ -91,15 +94,29 @@ const applyFiltersFunctions = {
         try {
           dataValue = JSON.parse(dataValue)
           isOk =
-            isOk ||
             (dataValue[value] === undefined && !isTrue) ||
             dataValue[value] === isTrue
         } catch {
           isOk = false
         }
+
+        // Number case
+      } else if (filter.descriptor.data_type === 'number') {
+        try {
+          dataValue = parseFloat(dataValue)
+          filter.values.forEach(value => {
+            const val = parseFloat(value)
+            isOk = isOk || dataValue === val
+          })
+        } catch {
+          isOk = false
+        }
+
+        // String case
       } else {
         filter.values.forEach(value => {
-          isOk = isOk || dataValue.indexOf(value.toLowerCase()) >= 0
+          dataValue = `${dataValue}`
+          isOk = isOk || dataValue.includes(value.toLowerCase())
         })
       }
     } else {
@@ -153,19 +170,19 @@ const applyFiltersFunctions = {
   },
 
   assetsready(entry, filter, taskMap) {
-    let isOk = false
-    if (entry.tasks) {
-      entry.tasks.forEach(taskId => {
-        const task = taskMap.get(taskId)
-        if (task.task_type_id === filter.value) {
-          isOk =
-            entry.nb_entities_out > 0 &&
-            entry.nb_entities_out === task.nb_assets_ready
-        }
-      })
+    if (entry.nb_entities_out <= 0) {
+      return filter.excluding
     }
-    if (filter.excluding) isOk = !isOk
-    return isOk
+    const isOk =
+      entry.tasks?.some(taskId => {
+        const task = taskMap.get(taskId)
+        return (
+          task &&
+          task.task_type_id === filter.value &&
+          entry.nb_entities_out === task.nb_assets_ready
+        )
+      }) ?? false
+    return filter.excluding ? !isOk : isOk
   }
 }
 
@@ -179,6 +196,8 @@ export const getKeyWords = queryText => {
   } else {
     return queryText
       .replace(UNION_REGEX, '')
+      .replace(EQUAL_PRIORITY_REGEX, '')
+      .replace(EQUAL_ASSIGNATION_REGEX, '')
       .replace(EQUAL_REGEX, '')
       .replace(MULTIPLE_REGEX, '')
       .split(' ')
@@ -250,7 +269,7 @@ export const getFilters = ({
     ...getAssetTypeFilters(assetTypes, query),
     ...getTaskTypeFilters(taskTypes, taskStatuses, query),
     ...getDescFilters(descriptors, taskTypes, query),
-    ...getAssignedToFilters(persons, query),
+    ...getAssignedToFilters(persons, taskTypes, query),
     ...getDepartmentFilters(departments, query),
     ...(getThumbnailFilters(query) || []),
     ...getPriorityFilter(taskTypes, query),
@@ -504,34 +523,40 @@ export const getDepartmentFilters = (departments, queryText) => {
  * Extract person filters (like size=big or size=small) from given
  * query.
  */
-export const getAssignedToFilters = (persons, queryText) => {
+export const getAssignedToFilters = (persons, taskTypes, queryText) => {
   if (!queryText) return []
 
   const results = []
-  const rgxMatches = queryText.match(EQUAL_REGEX)
+  const rgxMatches = queryText.match(EQUAL_ASSIGNATION_REGEX)
   if (rgxMatches) {
+    const taskTypeNameIndex = buildTaskTypeIndex(taskTypes)
+    const personIndex = new Map()
+    persons.forEach(person => {
+      const name = string.slugify(person.name.toLowerCase())
+      personIndex.set(name, person)
+    })
+
     rgxMatches.forEach(rgxMatch => {
-      const personIndex = new Map()
-      persons.forEach(person => {
-        const name = string.slugify(person.name.toLowerCase())
-        personIndex.set(name, person)
-      })
       const pattern = rgxMatch.split('=')
-      if (pattern[0] === 'assignedto') {
-        let value = pattern[1]
-        value = cleanParenthesis(value)
-        const excluding = value.startsWith('-')
-        if (excluding) value = value.substring(1)
-        const simplifiedValue = string.slugify(value.toLowerCase())
-        const person = personIndex.get(simplifiedValue)
-        if (person) {
-          results.push({
-            personId: person.id,
-            value,
-            type: 'assignedto',
-            excluding
-          })
-        }
+      let taskTypeName = pattern[0].substring('assignedto'.length)
+      taskTypeName = cleanParenthesis(taskTypeName)
+      const taskType = taskTypeName
+        ? taskTypeNameIndex[taskTypeName.toLowerCase()]?.[0]
+        : null
+      let value = pattern[1]
+      value = cleanParenthesis(value)
+      const excluding = value.startsWith('-')
+      if (excluding) value = value.substring(1)
+      const simplifiedValue = string.slugify(value.toLowerCase())
+      const person = personIndex.get(simplifiedValue)
+      if (person) {
+        results.push({
+          personId: person.id,
+          taskType,
+          value,
+          type: 'assignedto',
+          excluding
+        })
       }
     })
   }

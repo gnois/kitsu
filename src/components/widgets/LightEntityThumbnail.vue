@@ -1,30 +1,23 @@
 <template functional>
   <img
     class="thumbnail-picture"
+    loading="lazy"
+    alt=""
+    :key="props.previewFileId"
+    :src="`/api/pictures/${props.type}/preview-files/${props.previewFileId}.png`"
     :style="{
       width: props.width,
       height: props.height,
       'max-width': props.maxWidth,
       'max-height': props.maxHeight
     }"
-    v-lazy="
-      '/api/pictures/' +
-      props.type +
-      '/preview-files/' +
-      props.previewFileId +
-      '.png'
-    "
-    :key="props.previewFileId"
-    v-if="props.previewFileId"
     v-bind="data.attrs"
+    v-if="props.previewFileId"
   />
   <span
-    :class="{
-      'thumbnail-picture': true,
-      'thumbnail-empty': true
-    }"
+    class="thumbnail-picture thumbnail-empty"
     :style="{
-      width: props.width,
+      width: props.emptyWidth ? props.emptyWidth : props.width,
       height: props.emptyHeight ? props.emptyHeight : props.height
     }"
     v-bind="data.attrs"
@@ -62,6 +55,9 @@ export default {
     emptyHeight: {
       type: String
     },
+    emptyWidth: {
+      type: String
+    },
     type: {
       default: 'thumbnails',
       type: String
@@ -79,6 +75,7 @@ export default {
 span.thumbnail-empty {
   background: $white-grey;
   display: block;
+  flex-shrink: 0;
   margin: 0;
 }
 </style>

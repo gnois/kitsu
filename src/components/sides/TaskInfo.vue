@@ -4,12 +4,21 @@
       class="extend-bar"
       @mousedown.prevent="onExtendDown"
       @touchstart.prevent="onExtendDown"
-      v-if="withActions"
+      v-if="extendable"
     ></div>
     <div class="side task-info">
       <action-panel
-        v-if="withActions"
+        v-if="
+          withActions &&
+          (!isConceptTask || selectedConcepts.size > 0) &&
+          (nbSelectedEntities > 0 ||
+            nbSelectedTasks > 0 ||
+            nbSelectedValidations > 0)
+        "
+        :is-movie-preview="isMoviePreview"
         :is-set-frame-thumbnail-loading="loading.setFrameThumbnail"
+        :production-id="currentProductionId"
+        :team="currentTeam"
         @export-task="onExportClick"
         @set-frame-thumbnail="onSetCurrentFrameAsThumbnail"
       />
@@ -21,7 +30,10 @@
           ((nbSelectedTasks || 0) > 1 || nbSelectedValidations > 0)
         "
       >
-        <h1 class="title">{{ $tc('tasks.selected_tasks') }}</h1>
+        <h1 class="title">
+          {{ $tc('tasks.selected_tasks') }}
+          ({{ nbSelectedTasks }})
+        </h1>
         <div class="task-list mt1">
           <div
             class="selected-task-line flexrow"
@@ -31,9 +43,15 @@
             <task-type-name
               class="flexrow-item task-type"
               :task-type="taskTypeMap.get(task.task_type_id)"
-              :production-id="currentProduction.id"
+              :production-id="task.project_id"
             />
             <span class="flexrow-item">{{ task.entity_name }}</span>
+            <span
+              class="flexrow-item pointer"
+              @click="removeTaskFromSelection(task)"
+            >
+              <x-icon :size="12" />
+            </span>
           </div>
           <div class="mt2 selected-task-line" v-if="nbSelectedValidations > 0">
             <span v-if="nbSelectedTasks > 0">+</span>
@@ -45,11 +63,11 @@
 
       <div v-else-if="task">
         <div class="pa1 pb0">
-          <div class="flexrow header-title">
+          <div class="flexrow header-title" v-if="!isConceptTask">
             <task-type-name
               class="flexrow-item task-type"
               :task-type="currentTaskType"
-              :production-id="currentProduction.id"
+              :production-id="task.project_id"
               v-if="currentTaskType"
             />
             <div class="title flexrow-item filler">
@@ -63,7 +81,7 @@
         <div class="task-columns pa1 pt0" ref="task-columns">
           <div class="task-column preview-column" v-if="isPreview">
             <div class="preview-column-content">
-              <div class="flexrow">
+              <div class="flexrow" v-if="!isConceptTask">
                 <div
                   class="preview-list flexrow w100"
                   v-if="previewOptions.length > 0"
@@ -73,6 +91,7 @@
                     :options="previewOptions"
                     is-preview
                     thin
+                    :value="previewOptions[currentPreviewIndex]?.value"
                     @input="onPreviewChanged"
                   />
                 </div>
@@ -82,19 +101,21 @@
                     class="history-button flexrow-item"
                     :to="taskPath"
                   >
-                    <corner-right-up-icon size="0.9x" />
+                    <corner-right-up-icon :size="12" />
                   </router-link>
                 </div>
               </div>
 
               <div class="preview">
-                <div v-if="taskPreviews && taskPreviews.length > 0">
+                <template v-if="taskPreviews && taskPreviews.length > 0">
                   <preview-player
                     :entity-preview-files="taskEntityPreviews"
+                    :entity-type="entityType"
                     :extra-wide="isExtraWide"
                     :is-assigned="isAssigned"
                     :last-preview-files="taskPreviews"
                     :light="!isWide"
+                    :link="currentPreviewComment?.links?.[0]"
                     :previews="currentPreview ? currentPreview.previews : []"
                     :read-only="isPreviewPlayerReadOnly"
                     :task="task"
@@ -105,10 +126,10 @@
                     @remove-extra-preview="onRemoveExtraPreview"
                     @previews-order-change="onPreviewsOrderChange"
                     @comment-added="onCommentAdded"
-                    @time-updated="onTimeUpdated"
+                    @frame-updated="onFrameUpdated"
                     ref="preview-player"
                   />
-                </div>
+                </template>
 
                 <div
                   class="no-preview"
@@ -128,14 +149,13 @@
                   :user="user"
                   :team="currentTeam"
                   :task="task"
-                  :task-status="getTaskStatusForCurrentUser(task.project_id)"
-                  :light="true"
+                  :task-status="taskStatuses"
                   :is-loading="loading.addComment"
-                  :previewForms="previewForms"
+                  :preview-forms="previewForms"
                   :is-error="errors.addComment"
                   :is-max-retakes-error="errors.addCommentMaxRetakes"
-                  :fps="parseInt(currentFps)"
-                  :time="isPreview ? currentTime : currentTimeRaw"
+                  :fps="currentFps"
+                  :frame="currentFrame || currentFrameRaw"
                   :revision="currentRevision"
                   :is-movie="isMoviePreview"
                   @add-comment="addComment"
@@ -144,7 +164,7 @@
                   @clear-files="clearPreviewFiles"
                   @remove-preview="onPreviewFormRemoved"
                   @annotation-snapshots-requested="extractAnnotationSnapshots"
-                  v-show="isCommentingAllowed"
+                  v-if="isCommentingAllowed"
                 />
 
                 <div
@@ -158,25 +178,32 @@
                     v-xyz="{ fade: animOn, up: animOn, 'flip-up': animOn }"
                   >
                     <comment
-                      :key="'comment' + comment.id"
+                      :key="`comment-${comment.id}`"
                       :comment="comment"
+                      :fps="currentFps"
+                      :frame="currentFrame || currentFrameRaw"
+                      :is-change="isStatusChange(index)"
+                      :is-checkable="
+                        user.id === comment.person?.id ||
+                        (isCurrentUserArtist && isAssigned) ||
+                        isDepartmentSupervisor ||
+                        isCurrentUserManager
+                      "
+                      :is-editable="
+                        user.id === comment.person?.id || isCurrentUserAdmin
+                      "
+                      :is-pinnable="
+                        isDepartmentSupervisor || isCurrentUserManager
+                      "
+                      :revision="currentRevision"
                       :task="task"
                       :team="currentTeam"
-                      :light="true"
-                      :add-preview="onAddPreviewClicked"
-                      :is-first="index === 0"
-                      :is-last="index === pinnedCount"
-                      :is-change="isStatusChange(index)"
-                      :editable="
-                        (comment.person && user.id === comment.person.id) ||
-                        isCurrentUserAdmin
-                      "
+                      @ack-comment="onAckComment"
                       @duplicate-comment="onDuplicateComment"
                       @pin-comment="onPinComment"
                       @edit-comment="onEditComment"
                       @delete-comment="onDeleteComment"
                       @checklist-updated="saveComment"
-                      @ack-comment="onAckComment"
                       @time-code-clicked="timeCodeClicked"
                       v-for="(comment, index) in taskComments"
                     />
@@ -201,6 +228,8 @@
           :active="modals.addPreview"
           :is-loading="loading.addPreview"
           :is-error="errors.addPreview"
+          :expected-frames="entityFrames"
+          :fps="currentFps"
           @cancel="closeAddPreviewModal"
           @confirm="confirmAddPreviewModal"
         />
@@ -211,15 +240,19 @@
           :is-loading="loading.addExtraPreview"
           :is-error="errors.addExtraPreview"
           :form-data="addExtraPreviewFormData"
+          message=""
           @cancel="onCloseExtraPreview"
           @confirm="createExtraPreview"
         />
 
         <edit-comment-modal
           :active="modals.editComment"
+          :comment-to-edit="commentToEdit"
+          :fps="currentFps"
+          :frame="currentFrame || currentFrameRaw"
           :is-loading="loading.editComment"
           :is-error="errors.editComment"
-          :comment-to-edit="commentToEdit"
+          :revision="currentRevision"
           :team="currentTeam"
           @confirm="confirmEditTaskComment"
           @cancel="onCancelEditComment"
@@ -258,46 +291,57 @@
         </div>
       </div>
 
-      <div class="side task-info has-text-centered" v-else>
-        {{ $t('tasks.no_task_selected') }}
+      <div class="side task-info empty" v-else>
+        <div class="has-text-centered mb0">
+          <template v-if="entityType === 'Concept'">
+            {{ $t('concepts.no_concept_selected') }}
+          </template>
+          <template v-else>
+            {{ $t('tasks.no_task_selected') }}
+          </template>
+        </div>
+        <hr class="no-selection-separator" />
+        <div class="empty-section">
+          <slot />
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
+import { CornerRightUpIcon, XIcon } from 'lucide-vue'
 import moment from 'moment'
+import { mapGetters, mapActions } from 'vuex'
 
 import csv from '@/lib/csv'
 import drafts from '@/lib/drafts'
 import { getTaskEntityPath, getTaskPath } from '@/lib/path'
 import preferences from '@/lib/preferences'
 import { getTaskTypeStyle } from '@/lib/render'
-import { sortTaskNames } from '@/lib/sorting'
+import { sortPeople, sortTaskNames } from '@/lib/sorting'
 import stringHelpers from '@/lib/string'
 import { formatDate } from '@/lib/time'
 
 import { taskMixin } from '@/components/mixins/task'
 import { domMixin } from '@/components/mixins/dom'
 
-import { CornerRightUpIcon } from 'vue-feather-icons'
-
-import ActionPanel from '@/components/tops/ActionPanel'
-import AddComment from '@/components/widgets/AddComment'
-import AddPreviewModal from '@/components/modals/AddPreviewModal'
-import Comment from '@/components/widgets/Comment'
-import ComboboxStyled from '@/components/widgets/ComboboxStyled'
-import DeleteModal from '@/components/modals/DeleteModal'
-import EditCommentModal from '@/components/modals/EditCommentModal'
-import Spinner from '@/components/widgets/Spinner'
-import TaskTypeName from '@/components/widgets/TaskTypeName'
-import PreviewPlayer from '@/components/previews/PreviewPlayer'
+import ActionPanel from '@/components/tops/ActionPanel.vue'
+import AddComment from '@/components/widgets/AddComment.vue'
+import AddPreviewModal from '@/components/modals/AddPreviewModal.vue'
+import Comment from '@/components/widgets/Comment.vue'
+import ComboboxStyled from '@/components/widgets/ComboboxStyled.vue'
+import DeleteModal from '@/components/modals/DeleteModal.vue'
+import EditCommentModal from '@/components/modals/EditCommentModal.vue'
+import PreviewPlayer from '@/components/previews/PreviewPlayer.vue'
+import Spinner from '@/components/widgets/Spinner.vue'
+import TaskTypeName from '@/components/widgets/TaskTypeName.vue'
 
 const DEFAULT_PANEL_WIDTH = 400
 
 export default {
   name: 'task-info',
+
   mixins: [domMixin, taskMixin],
 
   components: {
@@ -311,13 +355,26 @@ export default {
     EditCommentModal,
     PreviewPlayer,
     Spinner,
-    TaskTypeName
+    TaskTypeName,
+    XIcon
   },
 
   props: {
-    task: {
+    currentFrame: {
+      type: Number,
+      default: 0
+    },
+    currentParentPreview: {
       type: Object,
-      default: () => {}
+      default: null
+    },
+    entityType: {
+      type: String,
+      default: 'Asset'
+    },
+    extendable: {
+      type: Boolean,
+      default: true
     },
     isLoading: {
       type: Boolean,
@@ -327,29 +384,17 @@ export default {
       type: Boolean,
       default: true
     },
-    currentTimeRaw: {
-      type: Number,
-      default: 0
-    },
-    currentParentPreview: {
-      type: Object,
-      default: null
-    },
     silent: {
       type: Boolean,
       default: false
     },
-    panelName: {
-      type: String,
-      default: 'todefine'
+    task: {
+      type: Object,
+      default: () => {}
     },
     withActions: {
       type: Boolean,
       default: false
-    },
-    entityType: {
-      type: String,
-      default: 'Asset'
     }
   },
 
@@ -358,10 +403,10 @@ export default {
       addExtraPreviewFormData: null,
       animOn: false,
       previewForms: [],
+      currentFrameRaw: 0,
       currentPreviewIndex: 0,
       currentPreviewPath: '',
       currentPreviewDlPath: '',
-      currentTime: 0,
       commentToEdit: null,
       isWide: false,
       isExtraWide: false,
@@ -408,14 +453,6 @@ export default {
   },
 
   mounted() {
-    this.loadTaskData()
-    if (this.$refs['add-comment']) {
-      const draft = drafts.getTaskDraft(this.task.id)
-      if (draft) {
-        this.$refs['add-comment'].text = draft
-      }
-    }
-
     if (this.sideColumnParent) {
       const panelWidth =
         preferences.getIntPreference('task:panel-width') || DEFAULT_PANEL_WIDTH
@@ -430,6 +467,7 @@ export default {
 
   computed: {
     ...mapGetters([
+      'isSavingCommentPreview',
       'currentEpisode',
       'currentProduction',
       'getTaskComment',
@@ -437,9 +475,10 @@ export default {
       'getTaskPreviews',
       'getTaskStatusForCurrentUser',
       'isCurrentUserAdmin',
+      'isCurrentUserArtist',
       'isCurrentUserClient',
-      'isCurrentUserSupervisor',
       'isCurrentUserManager',
+      'isCurrentUserSupervisor',
       'isSingleEpisode',
       'isTVShow',
       'lastCommentDraft',
@@ -448,9 +487,11 @@ export default {
       'previewFormData',
       'productionMap',
       'selectedAssets',
+      'selectedConcepts',
       'selectedEdits',
       'selectedShots',
       'selectedTasks',
+      'shotMap',
       'nbSelectedValidations',
       'taskEntityPreviews',
       'taskTypeMap',
@@ -465,17 +506,24 @@ export default {
     },
 
     nbSelectedEntities() {
-      return this.selectedEntities ? this.selectedEntities.size : 0
+      return this.selectedEntities?.size || 0
     },
 
     selectedEntities() {
       return this[`selected${this.entityType}s`]
     },
 
+    currentProductionId() {
+      return this.task?.project_id || this.currentProduction?.id
+    },
+
     currentTeam() {
       if (!this.task) return []
       const production = this.productionMap.get(this.task.project_id)
-      return production.team.map(id => this.personMap.get(id))
+      if (!production) return []
+      return sortPeople(
+        production.team.map(personId => this.personMap.get(personId))
+      )
     },
 
     title() {
@@ -488,38 +536,34 @@ export default {
     },
 
     isAssigned() {
-      if (this.task) {
-        return this.task.assignees.some(assigneeId => {
-          return assigneeId === this.user.id
-        })
-      } else {
-        return false
-      }
+      return (
+        this.task?.assignees.some(personId => personId === this.user.id) ??
+        false
+      )
     },
 
     isCommentingAllowed() {
-      if (this.task) {
-        if (this.isCurrentUserManager) {
-          return true
-        } else if (this.isCurrentUserSupervisor) {
-          if (this.user.departments.length === 0) {
-            return true
-          } else {
-            const taskType = this.taskTypeMap.get(this.task.task_type_id)
-            return (
-              taskType.department_id &&
-              this.user.departments.includes(taskType.department_id)
-            )
-          }
-        } else if (this.isCurrentUserClient) {
-          return true
-        } else if (
-          this.task.assignees.find(personId => personId === this.user.id)
-        ) {
-          return true
-        }
+      return (
+        this.task &&
+        (this.isAssigned ||
+          this.isCurrentUserClient ||
+          this.isDepartmentSupervisor ||
+          this.isCurrentUserManager)
+      )
+    },
+
+    isConceptTask() {
+      return this.entityType === 'Concept'
+    },
+
+    isDepartmentSupervisor() {
+      if (!this.isCurrentUserSupervisor) {
+        return false
       }
-      return false
+      if (this.user.departments.length === 0) {
+        return true
+      }
+      return this.user.departments.includes(this.currentTaskType?.department_id)
     },
 
     isPreviewPlayerReadOnly() {
@@ -530,10 +574,8 @@ export default {
           if (this.user.departments.length === 0) {
             return false
           } else {
-            const taskType = this.taskTypeMap.get(this.task.task_type_id)
-            return !(
-              taskType.department_id &&
-              this.user.departments.includes(taskType.department_id)
+            return !this.user.departments.includes(
+              this.currentTaskType?.department_id
             )
           }
         }
@@ -552,7 +594,7 @@ export default {
     },
 
     currentTaskType() {
-      return this.task ? this.taskTypeMap.get(this.task.task_type_id) : null
+      return this.taskTypeMap.get(this.task?.task_type_id)
     },
 
     currentPreview() {
@@ -560,6 +602,14 @@ export default {
       return this.taskPreviews && this.taskPreviews.length > 0
         ? this.taskPreviews[index]
         : null
+    },
+
+    currentPreviewComment() {
+      return this.taskComments.find(comment =>
+        comment.previews?.some(
+          preview => preview.revision === this.currentRevision
+        )
+      )
     },
 
     currentPreviewId() {
@@ -576,15 +626,15 @@ export default {
     },
 
     currentFps() {
-      return this.productionMap.get(this.task.project_id).fps || '25'
+      return parseInt(this.productionMap.get(this.task.project_id)?.fps) || 25
     },
 
     currentRevision() {
       return this.currentParentPreview && this.currentParentPreview.revision
         ? this.currentParentPreview.revision
         : this.currentPreview
-        ? this.currentPreview.revision
-        : 0
+          ? this.currentPreview.revision
+          : 0
     },
 
     extension() {
@@ -645,6 +695,13 @@ export default {
       return `/api/movies/originals/preview-files/${previewId}.mp4`
     },
 
+    taskStatuses() {
+      return this.getTaskStatusForCurrentUser(
+        this.task.project_id,
+        this.isConceptTask
+      )
+    },
+
     taskTypeStyle() {
       return getTaskTypeStyle(this.task)
     },
@@ -652,7 +709,7 @@ export default {
     taskPath() {
       return getTaskPath(
         this.task,
-        this.currentProduction,
+        null,
         this.isTVShow,
         this.currentEpisode,
         this.taskTypeMap
@@ -666,25 +723,12 @@ export default {
 
     previewOptions() {
       if (!this.taskPreviews) return []
-      return this.taskPreviews.map((preview, index) => {
-        return {
+      return [...this.taskPreviews]
+        .sort((a, b) => b.revision - a.revision)
+        .map(preview => ({
           value: preview.id,
-          label: 'v' + preview.revision
-        }
-      })
-    },
-
-    lastFivePreviews() {
-      if (this.taskPreviews) {
-        return this.taskPreviews.slice(0, 5)
-      } else {
-        return []
-      }
-    },
-
-    pinnedCount() {
-      if (!this.taskComments) return 0
-      return this.taskComments.filter(c => c.pinned).length
+          label: `v${preview.revision}`
+        }))
     },
 
     selectedTasksToDisplay() {
@@ -706,6 +750,7 @@ export default {
       'deleteTaskComment',
       'deleteTaskPreview',
       'editTaskComment',
+      'loadComment',
       'loadPreviewFileFormData',
       'loadTask',
       'loadTaskComments',
@@ -713,6 +758,7 @@ export default {
       'refreshPreview',
       'pinComment',
       'refreshComment',
+      'removeSelectedTask',
       'setPreview',
       'subscribeToTask',
       'unsubscribeFromTask',
@@ -743,7 +789,8 @@ export default {
       attachment,
       checklist,
       taskStatusId,
-      revision = undefined
+      revision = undefined,
+      link = undefined
     ) {
       this.animOn = true
       this.$nextTick(() => {
@@ -758,10 +805,13 @@ export default {
           attachment,
           checklist,
           comment,
+          links: link ? [link] : null,
           revision
         }
-        let action = 'commentTask'
-        if (this.previewForms.length > 0) action = 'commentTaskWithPreview'
+        const action =
+          this.previewForms.length > 0
+            ? 'commentTaskWithPreview'
+            : 'commentTask'
         this.loading.addComment = true
         this.errors.addComment = false
         this.errors.addCommentMaxRetakes = false
@@ -775,10 +825,7 @@ export default {
           })
           .catch(err => {
             console.error(err)
-            const isRetakeError =
-              err.response &&
-              err.response.body.message &&
-              err.response.body.message.indexOf('retake') > 0
+            const isRetakeError = err.body?.message?.includes('retake') ?? false
             this.errors.addComment = !isRetakeError
             this.errors.addCommentMaxRetakes = isRetakeError
             this.loading.addComment = false
@@ -787,9 +834,11 @@ export default {
       })
     },
 
-    reset() {
+    reset({ keepPreviewFiles = false } = {}) {
       this.resetModals()
-      this.clearPreviewFiles()
+      if (!keepPreviewFiles) {
+        this.clearPreviewFiles()
+      }
       if (this.task) {
         this.taskComments = this.getTaskComments(this.task.id)
         this.taskPreviews = this.getTaskPreviews(this.task.id)
@@ -798,13 +847,13 @@ export default {
         this.currentPreviewDlPath = this.getOriginalDlPath()
         this.resetDraft()
         this.$nextTick(() => {
-          if (this.$refs['add-comment']) this.$refs['add-comment'].focus()
+          this.focusCommentTextarea()
         })
       }
     },
 
     focusCommentTextarea() {
-      if (this.$refs['add-comment']) this.$refs['add-comment'].focus()
+      this.$refs['add-comment']?.focus()
     },
 
     getOriginalPath() {
@@ -857,7 +906,6 @@ export default {
         .then(() => {
           this.loading.addExtraPreview = false
           this.$refs['add-extra-preview-modal'].reset()
-          this.clearPreviewFiles()
           this.reset()
           setTimeout(() => {
             this.$refs['preview-player'].displayLast()
@@ -890,13 +938,13 @@ export default {
             preview: {
               id: previewId,
               revision,
-              extension: extension
+              extension
             },
             taskId,
             commentId,
             comment
           })
-          this.reset()
+          this.reset({ keepPreviewFiles: true })
         }
       }
     },
@@ -978,7 +1026,7 @@ export default {
       const previewId = previewPlayer.currentPreview.id
       this.setPreview({
         taskId: this.task.id,
-        entityId: this.task.entity.id,
+        entityId: this.task.entity_id,
         previewId,
         frame
       }).finally(() => {
@@ -1016,12 +1064,16 @@ export default {
       this.modals.deleteComment = false
     },
 
-    saveComment(comment, checklist) {
-      this.editTaskComment({
-        taskId: this.task.id,
-        comment,
-        checklist
-      })
+    async saveComment(comment) {
+      try {
+        await this.editTaskComment({
+          taskId: this.task.id,
+          comment
+        })
+      } catch (err) {
+        console.error(err)
+        await this.loadTaskData()
+      }
     },
 
     confirmDeleteTaskComment() {
@@ -1131,8 +1183,8 @@ export default {
       }, 20)
     },
 
-    onTimeUpdated(time) {
-      this.currentTime = time
+    onFrameUpdated(frame) {
+      this.currentFrameRaw = frame
     },
 
     async extractAnnotationSnapshots() {
@@ -1149,7 +1201,7 @@ export default {
       const nameData = [
         moment().format('YYYY-MM-DD'),
         'kitsu',
-        this.currentProduction.name,
+        this.productionMap.get(this.task.project_id)?.name,
         this.task.entity_name.replaceAll(' / ', '_'),
         this.taskTypeMap.get(this.task.task_type_id).name,
         'comments'
@@ -1218,7 +1270,7 @@ export default {
       this.refreshPreviewPlay()
     },
 
-    onExtendUp(event) {
+    onExtendUp() {
       this.removeEvents(this.domEvents)
       this.refreshPreviewPlay()
       if (this.sideColumnParent) {
@@ -1239,9 +1291,9 @@ export default {
     onSetCurrentFrameAsThumbnail(isUseCurrentFrame) {
       if (this.$refs['preview-player']) {
         this.loading.setFrameThumbnail = true
-        let frame = undefined
-        if (isUseCurrentFrame && this.$refs['preview-player'].isMovie) {
-          frame = parseInt(this.$refs['preview-player'].currentFrame)
+        let frame = null
+        if (isUseCurrentFrame) {
+          frame = this.currentFrameRaw
         }
         return this.setCurrentPreviewAsEntityThumbnail(frame)
       }
@@ -1251,33 +1303,40 @@ export default {
       if (this.$refs['preview-player']) {
         this.$refs['preview-player'].previewViewer.resize()
       }
+    },
+
+    removeTaskFromSelection(task) {
+      const data = {
+        column: { id: task.task_type_id },
+        entity: { id: task.entity_id },
+        task
+      }
+      this.removeSelectedTask({ task: data }) // remove list selection
+      this.removeSelectedTask({ task }) // remove
+      this.$emit('task-removed', task)
     }
   },
 
   watch: {
     task() {
-      this.previewForms = []
+      this.clearPreviewFiles()
       this.currentPreviewIndex = 0
-      if (this.previousTaskId && this.$refs['add-comment']) {
-        const lastComment = `${this.$refs['add-comment'].text}`
-        const previousDraft = drafts.getTaskDraft(this.previousTaskId)
-        if (
-          (this.$refs['add-comment'].text.length > 0 || previousDraft) &&
-          this.$refs['add-comment'].text !== previousDraft
-        ) {
-          drafts.setTaskDraft(this.previousTaskId, lastComment)
-        }
-      }
-      this.$nextTick(() => {
-        if (this.task) this.previousTaskId = this.task.id
-        if (this.task && this.$refs['add-comment']) {
-          const draft = drafts.getTaskDraft(this.task.id)
-          if (draft) this.$refs['add-comment'].text = draft
-        }
-      })
       if (!this.silent) {
         this.loadTaskData()
       }
+    },
+
+    silent: {
+      immediate: true,
+      handler() {
+        if (!this.silent) {
+          this.loadTaskData()
+        }
+      }
+    },
+
+    currentFrame() {
+      this.currentFrameRaw = this.currentFrame
     }
   },
 
@@ -1336,6 +1395,17 @@ export default {
         }, 1000)
       },
 
+      'comment:update'(eventData) {
+        const commentId = eventData.comment_id
+        if (
+          this.isSavingCommentPreview ||
+          (!this.task && !this.taskComments.some(({ id }) => id === commentId))
+        ) {
+          return
+        }
+        this.loadComment({ commentId }).catch(console.error)
+      },
+
       'comment:acknowledge'(eventData) {
         this.onRemoteAcknowledge(eventData, 'ack')
       },
@@ -1354,7 +1424,6 @@ export default {
             const reply = comment.replies.find(r => r.id === eventData.reply_id)
             if (!reply) {
               this.refreshComment({
-                taskId: this.task.id,
                 commentId: eventData.comment_id
               })
                 .then(remoteComment => {
@@ -1407,7 +1476,7 @@ export default {
           this.refreshPreview({
             previewId: previewPlayer.currentPreview.id,
             taskId: previewPlayer.currentPreview.task_id
-          }).then(preview => {
+          }).then(() => {
             if (!previewPlayer.notSaved) {
               this.taskPreviews = this.getTaskPreviews(this.task.id)
               previewPlayer.reloadAnnotations()
@@ -1428,7 +1497,7 @@ export default {
   .no-comment {
     background: #46494f;
     border-color: $dark-grey;
-    box-shadow: 0px 0px 6px #333;
+    box-shadow: 0 0 6px #333;
   }
 
   .extend-bar {
@@ -1456,7 +1525,7 @@ export default {
 .add-comment {
   padding: 0.5em;
   margin-bottom: 0.5em;
-  box-shadow: 0px 0px 6px #e0e0e0;
+  box-shadow: 0 0 6px #e0e0e0;
 }
 
 .page-header {
@@ -1491,7 +1560,7 @@ export default {
   background: white;
   padding: 1em;
   border-radius: 5px;
-  box-shadow: 0px 0px 6px #e0e0e0;
+  box-shadow: 0 0 6px #e0e0e0;
 }
 
 .task-columns {
@@ -1504,7 +1573,7 @@ export default {
   border-bottom: 1px solid $white-grey;
   border-right: 1px solid $white-grey;
   margin-top: 0.1em;
-  box-shadow: 0px 0px 6px #e0e0e0;
+  box-shadow: 0 0 6px #e0e0e0;
 }
 
 .add-preview-button {
@@ -1514,7 +1583,7 @@ export default {
 
 .no-comment {
   background: white;
-  box-shadow: 0px 0px 6px #e0e0e0;
+  box-shadow: 0 0 6px #e0e0e0;
 }
 
 .comments {
@@ -1522,7 +1591,7 @@ export default {
 }
 
 .preview-colum-content {
-  box-shadow: 0px 0px 6px #e0e0e0;
+  box-shadow: 0 0 6px #e0e0e0;
 }
 
 .preview-standard-file {
@@ -1568,7 +1637,7 @@ export default {
 
 .side {
   flex: 1;
-  overflow: scroll;
+  overflow: auto;
 }
 
 .extend-bar {
@@ -1603,12 +1672,31 @@ export default {
     line-height: 1.1em;
     margin: 0;
     opacity: 0.8;
-    left: 0px;
+    left: 0;
     padding: 0;
     position: absolute;
     text-align: center;
     top: 0;
     width: 14px;
   }
+}
+
+.empty {
+  padding-top: 1em;
+}
+
+.empty-section {
+  display: flex;
+  flex-direction: column;
+  padding: 0 1em 1em 1em;
+  position: relative;
+  bottom: 0;
+  right: 0;
+  left: 0;
+}
+
+.no-selection-separator {
+  background-color: var(--border-alt);
+  margin: 1em;
 }
 </style>

@@ -192,6 +192,7 @@ const initialState = {
   sequenceValidationColumns: [],
   isSequenceDescription: false,
   isSequenceEstimation: false,
+  isSequenceResolution: false,
   isSequenceTime: false,
   isSequencesLoading: false,
   isSequencesLoadingError: false,
@@ -223,6 +224,7 @@ const getters = {
   displayedSequencesTimeSpent: state => state.displayedSequencesTimeSpent,
   isSequenceDescription: state => state.isSequenceDescription,
   isSequenceEstimation: state => state.isSequenceEstimation,
+  isSequenceResolution: state => state.isSequenceResolution,
   isSequenceTime: state => state.isSequenceTime,
 
   sequences: state => cache.sequences,
@@ -302,32 +304,27 @@ const actions = {
   },
 
   saveSequenceSearch({ commit, rootGetters }, searchQuery) {
-    const query = state.sequenceSearchQueries.find(
-      query => query && query.name === searchQuery
-    )
-    const production = rootGetters.currentProduction
-    if (!query) {
-      return peopleApi
-        .createFilter(
-          'sequence',
-          searchQuery,
-          searchQuery,
-          production.id,
-          'Sequence'
-        )
-        .then(query => {
-          commit(ADD_SEQUENCE_SEARCH, query)
-          return Promise.resolve(query)
-        })
-    } else {
-      return Promise.resolve()
+    if (state.sequenceSearchQueries.some(query => query.name === searchQuery)) {
+      return
     }
+    const production = rootGetters.currentProduction
+    return peopleApi
+      .createFilter(
+        'sequence',
+        searchQuery,
+        searchQuery,
+        production.id,
+        'Sequence'
+      )
+      .then(searchQuery => {
+        commit(ADD_SEQUENCE_SEARCH, searchQuery)
+        return searchQuery
+      })
   },
 
-  removeSequenceSearch({ commit, rootGetters }, searchQuery) {
+  removeSequenceSearch({ commit }, searchQuery) {
     return peopleApi.removeFilter(searchQuery).then(() => {
       commit(REMOVE_SEQUENCE_SEARCH, searchQuery)
-      return Promise.resolve()
     })
   },
 
@@ -627,6 +624,7 @@ const mutations = {
     let isDescription = false
     let isTime = false
     let isEstimation = false
+    let isResolution = false
     state.sequenceMap = new Map()
     sequences.forEach(sequence => {
       const taskIds = []
@@ -674,6 +672,7 @@ const mutations = {
       if (!isTime && sequence.timeSpent > 0) isTime = true
       if (!isEstimation && sequence.estimation > 0) isEstimation = true
       if (!isDescription && sequence.description) isDescription = true
+      if (!isResolution && sequence.data.resolution) isResolution = true
 
       state.sequenceMap.set(sequence.id, sequence)
     })
@@ -696,6 +695,7 @@ const mutations = {
     state.isSequenceTime = isTime
     state.isSequenceEstimation = isEstimation
     state.isSequenceDescription = isDescription
+    state.isSequenceResolution = isResolution
 
     state.isSequencesLoading = false
     state.isSequencesLoadingError = false
@@ -788,6 +788,9 @@ const mutations = {
     state.sequenceIndex = buildSequenceIndex(cache.sequences)
     if (sequence.description && !state.isSequenceDescription) {
       state.isSequenceDescription = true
+    }
+    if (sequence.data.resolution && !state.isSequenceResolution) {
+      state.isSequenceResolution = true
     }
   },
 
@@ -906,6 +909,17 @@ const mutations = {
   },
 
   [REMOVE_SELECTED_TASK](state, validationInfo) {
+    if (
+      !validationInfo.x &&
+      validationInfo.task?.column &&
+      state.sequenceMap.get(validationInfo.task.entity.id)
+    ) {
+      const entity = validationInfo.task.entity
+      const taskType = validationInfo.task.column
+      const list = state.displayedSequences.flat()
+      validationInfo.x = list.findIndex(e => e.id === entity.id)
+      validationInfo.y = state.sequenceValidationColumns.indexOf(taskType.id)
+    }
     if (
       state.sequenceSelectionGrid[0] &&
       state.sequenceSelectionGrid[validationInfo.x]

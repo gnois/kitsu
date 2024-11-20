@@ -9,18 +9,18 @@
 
     <div class="modal-content">
       <div class="box">
-        <h1 class="title" v-if="episodeToEdit && this.episodeToEdit.id">
+        <h1 class="title" v-if="episodeToEdit && episodeToEdit.id">
           {{ $t('episodes.edit_title') }} {{ episodeToEdit.name }}
         </h1>
         <h1 class="title" v-else>
           {{ $t('episodes.new_episode') }}
         </h1>
 
-        <form v-on:submit.prevent>
+        <form @submit.prevent>
           <text-field
             ref="nameField"
             :label="$t('episodes.fields.name')"
-            v-model="form.name"
+            v-model.trim="form.name"
             @enter="runConfirmation"
             v-focus
           />
@@ -30,6 +30,13 @@
             :label="$t('main.status')"
             :options="episodeStatusOptions"
             v-model="form.status"
+          />
+
+          <text-field
+            ref="resolutionField"
+            :label="$t('shots.fields.resolution')"
+            v-model="form.data.resolution"
+            @enter="runConfirmation"
           />
 
           <textarea-field
@@ -64,18 +71,21 @@
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
+import { mapGetters } from 'vuex'
+
 import { modalMixin } from '@/components/modals/base_modal'
 
-import ComboboxStyled from '@/components/widgets/ComboboxStyled'
-import MetadataField from '@/components/widgets/MetadataField'
-import ModalFooter from '@/components/modals/ModalFooter'
-import TextField from '@/components/widgets/TextField'
-import TextareaField from '@/components/widgets/TextareaField'
+import ComboboxStyled from '@/components/widgets/ComboboxStyled.vue'
+import MetadataField from '@/components/widgets/MetadataField.vue'
+import ModalFooter from '@/components/modals/ModalFooter.vue'
+import TextField from '@/components/widgets/TextField.vue'
+import TextareaField from '@/components/widgets/TextareaField.vue'
 
 export default {
   name: 'edit-episode-modal',
+
   mixins: [modalMixin],
+
   components: {
     ComboboxStyled,
     MetadataField,
@@ -109,7 +119,9 @@ export default {
       name: '',
       description: '',
       fps: '',
-      data: {}
+      data: {
+        resolution: ''
+      }
     }
     if (this.episodeToEdit && this.episodeToEdit.id) {
       form = {
@@ -117,7 +129,11 @@ export default {
         name: this.episodeToEdit.name,
         description: this.episodeToEdit.description,
         production_id: this.episodeToEdit.project_id,
-        data: this.episodeToEdit.data || {}
+        data:
+          {
+            ...this.episodeToEdit.data,
+            resolution: this.episodeToEdit.data.resolution || ''
+          } || {}
       }
     }
     return {
@@ -137,8 +153,6 @@ export default {
   },
 
   methods: {
-    ...mapActions([]),
-
     runConfirmation() {
       this.$emit('confirm', this.form)
     },
@@ -161,7 +175,11 @@ export default {
           name: this.episodeToEdit.name,
           status: this.episodeToEdit.status,
           description: this.episodeToEdit.description,
-          data: this.episodeToEdit.data || {}
+          data:
+            {
+              ...this.episodeToEdit.data,
+              resolution: this.episodeToEdit.data.resolution || ''
+            } || {}
         }
       }
     }

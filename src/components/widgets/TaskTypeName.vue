@@ -1,8 +1,12 @@
 <template>
-  <router-link :to="taskTypePath" v-if="productionId && !isCurrentUserClient">
+  <router-link :to="targetRoute" v-if="productionId && !isCurrentUserClient">
     <span
       class="tag task-type-name"
-      :style="{ 'border-left': '4px solid ' + color }"
+      :style="{
+        'border-left': '4px solid ' + color,
+        'border-top-right-radius': rounded ? '5px' : '0px',
+        'border-bottom-right-radius': rounded ? '5px' : '0px'
+      }"
     >
       {{ taskType.name }}
     </span>
@@ -15,7 +19,11 @@
       deletable,
       canceled: disable
     }"
-    :style="{ 'border-left': '4px solid ' + color }"
+    :style="{
+      'border-left': '4px solid ' + color,
+      'border-top-right-radius': rounded ? '5px' : '0px',
+      'border-bottom-right-radius': rounded ? '5px' : '0px'
+    }"
     v-else
   >
     {{ taskType.name }}
@@ -26,22 +34,14 @@
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
+import { mapGetters } from 'vuex'
+
 import { pluralizeEntityType } from '@/lib/path'
 
 export default {
   name: 'task-type-name',
-  components: {},
 
   props: {
-    taskType: {
-      type: Object,
-      default: null
-    },
-    productionId: {
-      type: String,
-      default: null
-    },
     deletable: {
       type: Boolean,
       default: false
@@ -49,20 +49,57 @@ export default {
     disable: {
       type: Boolean,
       default: false
+    },
+    productionId: {
+      type: String,
+      default: null
+    },
+    rounded: {
+      type: Boolean,
+      default: false
+    },
+    taskId: {
+      type: String,
+      default: null
+    },
+    taskType: {
+      type: Object,
+      default: null
     }
   },
 
   computed: {
-    ...mapGetters(['isCurrentUserClient', 'isTaskTypePriorityHigherById']),
+    ...mapGetters(['isCurrentUserClient']),
 
     color() {
       if (this.taskType.color.toUpperCase() === '#000000') return '$grey-strong'
       else return this.taskType.color
     },
 
-    taskTypePath() {
+    targetRoute() {
       let route = {}
-      if (this.taskType.for_entity === 'Episode') {
+      if (this.taskId) {
+        if (this.$route.params.episode_id) {
+          route = {
+            name: 'episode-task',
+            params: {
+              production_id: this.productionId,
+              task_id: this.taskId,
+              episode_id: this.$route.params.episode_id,
+              type: pluralizeEntityType(this.taskType.for_entity)
+            }
+          }
+        } else {
+          route = {
+            name: 'task',
+            params: {
+              production_id: this.productionId,
+              task_id: this.taskId,
+              type: pluralizeEntityType(this.taskType.for_entity)
+            }
+          }
+        }
+      } else if (this.taskType.for_entity === 'Episode') {
         route = {
           name: 'episodes-task-type',
           params: {
@@ -88,10 +125,6 @@ export default {
       }
       return route
     }
-  },
-
-  methods: {
-    ...mapActions([])
   }
 }
 </script>

@@ -1,65 +1,67 @@
 <template>
   <button
+    class="button"
     :class="{
-      button: true,
-      active: active,
-      small: isSmall,
+      active,
       'is-on': isOn,
       'is-loading': isLoading,
       'is-primary': isPrimary
     }"
+    :disabled="disabled"
     :title="title"
+    :type="type"
     @click="$emit('click')"
   >
-    <grid-icon :class="iconClass" v-if="icon === 'grid'" />
-    <send-icon :class="iconClass" v-if="icon === 'send'" />
-    <paperclip-icon :class="iconClass" v-if="icon === 'attach'" />
-    <corner-left-down-icon :class="iconClass" v-if="icon === 'undo'" />
-    <corner-right-down-icon :class="iconClass" v-if="icon === 'redo'" />
-    <save-icon :class="iconClass" v-if="icon === 'save'" />
-    <plus-icon :class="iconClass" v-if="icon === 'plus'" />
-    <minus-icon :class="iconClass" v-if="icon === 'minus'" />
-    <message-square-icon :class="iconClass" v-if="icon === 'comment'" />
-    <download-icon :class="iconClass" v-if="icon === 'download'" />
-    <upload-icon :class="iconClass" v-if="icon === 'upload'" />
-    <film-icon :class="iconClass" v-if="icon === 'film'" />
-    <play-icon :class="iconClass" v-if="icon === 'play'" />
-    <pause-icon :class="iconClass" v-if="icon === 'pause'" />
-    <edit-icon :class="iconClass" v-if="icon === 'edit'" />
-    <image-icon :class="iconClass" v-if="icon === 'image'" />
-    <maximize-icon :class="iconClass" v-if="icon === 'maximize'" />
-    <trash-icon :class="iconClass" v-if="icon === 'delete'" />
-    <rotate-ccw-icon :class="iconClass" v-if="icon === 'restore'" />
-    <skip-back-icon :class="iconClass" v-if="icon === 'back'" />
-    <skip-forward-icon :class="iconClass" v-if="icon === 'forward'" />
-    <chevron-down-icon :class="iconClass" v-if="icon === 'down'" />
-    <chevron-left-icon :class="iconClass" v-if="icon === 'left'" />
-    <chevron-right-icon :class="iconClass" v-if="icon === 'right'" />
-    <copy-icon :class="iconClass" v-if="icon === 'compare'" />
-    <x-icon :class="iconClass" v-if="icon === 'remove'" />
-    <edit2-icon :class="iconClass" v-if="icon === 'pencil'" />
-    <layers-icon :class="iconClass" v-if="icon === 'layers'" />
-    <type-icon :class="iconClass" v-if="icon === 'type'" />
-    <list-icon :class="iconClass" v-if="icon === 'list'" />
-    <filter-icon :class="iconClass" v-if="icon === 'funnel'" />
-    <refresh-cw-icon :class="iconClass" v-if="icon === 'refresh'" />
-    <repeat-icon :class="iconClass" v-if="icon === 'repeat'" />
-    <volume-x-icon :class="iconClass" v-if="icon === 'soundoff'" />
-    <volume-2-icon :class="iconClass" v-if="icon === 'soundon'" />
-    <triangle-icon :class="iconClass" v-if="icon === 'triangle'" />
-    <music-icon :class="iconClass" v-if="icon === 'music'" />
-    <pen-tool-icon :class="iconClass" v-if="icon === 'pen'" />
-    <square-icon :class="iconClass" v-if="icon === 'eraser'" />
-    <key-icon :class="iconClass" v-if="icon == 'key'" />
-    <zoom-in-icon :class="iconClass" v-if="icon == 'loupe'" />
-    <globe-icon :class="iconClass" v-if="icon == 'globe'" />
-    <span :class="iconClass" v-if="icon === 'laser'"> ⦿ </span>
+    <grid-icon class="icon" v-if="icon === 'grid'" />
+    <send-icon class="icon" v-else-if="icon === 'send'" />
+    <paperclip-icon class="icon" v-else-if="icon === 'attach'" />
+    <corner-left-down-icon class="icon" v-else-if="icon === 'undo'" />
+    <corner-right-down-icon class="icon" v-else-if="icon === 'redo'" />
+    <save-icon class="icon" v-else-if="icon === 'save'" />
+    <plus-icon class="icon" v-else-if="icon === 'plus'" />
+    <minus-icon class="icon" v-else-if="icon === 'minus'" />
+    <message-square-icon class="icon" v-else-if="icon === 'comment'" />
+    <download-icon class="icon" v-else-if="icon === 'download'" />
+    <film-icon class="icon" v-else-if="icon === 'film'" />
+    <pause-icon class="icon" v-else-if="icon === 'pause'" />
+    <edit-icon class="icon" v-else-if="icon === 'edit'" />
+    <image-icon class="icon" v-else-if="icon === 'image'" />
+    <maximize-icon class="icon" v-else-if="icon === 'maximize'" />
+    <skip-back-icon class="icon" v-else-if="icon === 'back'" />
+    <skip-forward-icon class="icon" v-else-if="icon === 'forward'" />
+    <chevron-down-icon class="icon" v-else-if="icon === 'down'" />
+    <chevron-left-icon class="icon" v-else-if="icon === 'left'" />
+    <chevron-right-icon class="icon" v-else-if="icon === 'right'" />
+    <x-icon class="icon" v-else-if="icon === 'remove'" />
+    <edit2-icon class="icon" v-else-if="icon === 'pencil'" />
+    <layers-icon class="icon" v-else-if="icon === 'layers'" />
+    <list-icon class="icon" v-else-if="icon === 'list'" />
+    <triangle-icon class="icon" v-else-if="icon === 'triangle'" />
+    <music-icon class="icon" v-else-if="icon === 'music'" />
+    <square-icon class="icon" v-else-if="icon === 'eraser'" />
+    <key-icon class="icon" v-else-if="icon === 'key'" />
+    <zoom-in-icon class="icon" v-else-if="icon === 'loupe'" />
+    <globe-icon class="icon" v-else-if="icon === 'globe'" />
+    <codepen-icon class="icon" v-else-if="icon === 'codepen'" />
+    <link-icon class="icon" v-else-if="icon === 'link'" />
+    <clock-icon class="icon" v-else-if="icon === 'clock'" />
+    <file-digit-icon
+      class="icon"
+      :stroke-width="1.2"
+      v-else-if="icon === 'file-digit'"
+    />
+    <kitsu-icon
+      class="icon"
+      :name="icon"
+      :title="title"
+      :active="active"
+      v-else-if="icon !== ''"
+    />
     <span
       :class="{
-        text: true,
         'is-hidden-touch': isResponsive
       }"
-      v-if="isText"
+      v-if="text"
     >
       {{ text }}
     </span>
@@ -71,19 +73,21 @@ import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ClockIcon,
+  CodepenIcon,
   CornerLeftDownIcon,
   CornerRightDownIcon,
-  CopyIcon,
   DownloadIcon,
+  FileDigitIcon,
   EditIcon,
   Edit2Icon,
   GlobeIcon,
   GridIcon,
   FilmIcon,
-  FilterIcon,
   ImageIcon,
   KeyIcon,
   LayersIcon,
+  LinkIcon,
   ListIcon,
   MaximizeIcon,
   MessageSquareIcon,
@@ -91,76 +95,66 @@ import {
   MusicIcon,
   PaperclipIcon,
   PauseIcon,
-  PenToolIcon,
-  PlayIcon,
   PlusIcon,
-  RefreshCwIcon,
-  RepeatIcon,
-  RotateCcwIcon,
   SaveIcon,
   SendIcon,
   SkipBackIcon,
   SkipForwardIcon,
   SquareIcon,
-  TrashIcon,
-  TypeIcon,
   TriangleIcon,
-  UploadIcon,
-  VolumeXIcon,
-  Volume2Icon,
   XIcon,
   ZoomInIcon
-} from 'vue-feather-icons'
+} from 'lucide-vue'
+
+import KitsuIcon from '@/components/widgets/KitsuIcon.vue'
 
 export default {
   name: 'button-simple',
+
   components: {
     ChevronDownIcon,
     ChevronLeftIcon,
     ChevronRightIcon,
+    ClockIcon,
+    CodepenIcon,
     CornerLeftDownIcon,
     CornerRightDownIcon,
-    CopyIcon,
     DownloadIcon,
     EditIcon,
     Edit2Icon,
+    FileDigitIcon,
     FilmIcon,
-    FilterIcon,
     GlobeIcon,
     GridIcon,
     ImageIcon,
     KeyIcon,
+    KitsuIcon,
     LayersIcon,
+    LinkIcon,
     ListIcon,
-    ZoomInIcon,
     MaximizeIcon,
     MessageSquareIcon,
     MinusIcon,
     MusicIcon,
     PaperclipIcon,
     PauseIcon,
-    PenToolIcon,
-    PlayIcon,
     PlusIcon,
-    RefreshCwIcon,
-    RepeatIcon,
-    RotateCcwIcon,
     SaveIcon,
     SendIcon,
     SkipBackIcon,
     SkipForwardIcon,
     SquareIcon,
-    TrashIcon,
-    TypeIcon,
-    UploadIcon,
     TriangleIcon,
-    VolumeXIcon,
-    Volume2Icon,
-    XIcon
+    XIcon,
+    ZoomInIcon
   },
 
   props: {
     active: {
+      default: false,
+      type: Boolean
+    },
+    disabled: {
       default: false,
       type: Boolean
     },
@@ -184,10 +178,6 @@ export default {
       default: false,
       type: Boolean
     },
-    isSmall: {
-      default: false,
-      type: Boolean
-    },
     text: {
       default: '',
       type: String
@@ -195,40 +185,21 @@ export default {
     title: {
       default: '',
       type: String
-    }
-  },
-
-  computed: {
-    isText() {
-      return this.text && this.text.length > 0
     },
-
-    iconClass() {
-      return {
-        icon: true,
-        'is-small': true,
-        'only-icon': !this.isText
-      }
+    type: {
+      type: String,
+      validator: value => ['submit', 'button', 'reset'].includes(value)
     }
   }
 }
 </script>
 
 <style lang="scss" scoped>
-.icon.is-small.only-icon {
-  margin-right: 0;
-}
-
 .is-primary {
   border-radius: 2em;
 }
 
 .active {
   box-shadow: inset 0 0 2px 2px var(--box-shadow);
-}
-
-.small {
-  font-size: 0.8em;
-  padding: 0.4em;
 }
 </style>

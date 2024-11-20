@@ -28,7 +28,7 @@
             v-if="isAssetCasting"
           />
           <span class="filler"></span>
-          <show-infos-button :is-breakdown="true" class="flexrow-item" />
+          <show-infos-button class="flexrow-item" :is-breakdown="true" />
           <button-simple
             class="flexrow-item"
             :title="
@@ -43,22 +43,22 @@
           />
           <button-simple
             class="flexrow-item"
-            icon="grid"
+            icon="big-thumbnail"
             :is-on="isBigMode"
-            :title="$t('breakdown.big_pictures_mode')"
+            :title="$t('tasks.big_thumbnails')"
             @click="isBigMode = !isBigMode"
           />
           <button-simple
             class="flexrow-item"
             :title="$t('main.csv.import_file')"
-            icon="upload"
+            icon="import"
             :is-responsive="true"
             @click="showImportModal"
             v-if="isCurrentUserManager"
           />
           <button-simple
             class="flexrow-item"
-            icon="download"
+            icon="export"
             :is-responsive="true"
             :title="$t('main.csv.export_current_view')"
             @click="exportViewToCsv"
@@ -66,7 +66,7 @@
           <button-href-link
             class="flexrow-item"
             :title="$t('main.csv.export_file')"
-            icon="download"
+            icon="export-lines"
             :is-responsive="true"
             :path="exportUrlPath"
             v-if="isCurrentUserManager"
@@ -74,79 +74,160 @@
         </div>
 
         <spinner class="mt1" v-if="isLoading" />
-        <div class="casting-list" v-else>
-          <div class="mt1">
-            <div class="header flexrow">
-              <div class="entity-header">
-                {{ $t('shots.fields.name') }}
-              </div>
-              <div class="standby-header" v-if="!isShowInfosBreakdown">
-                {{ $t('breakdown.fields.standby') }}
-              </div>
-              <div
-                class="description-header"
-                v-if="!isShowInfosBreakdown && isDescription"
-              >
-                {{ $t('shots.fields.description') }}
-              </div>
-              <div
-                class="frames-header"
-                v-if="
-                  isShotCasting &&
-                  isFrames &&
-                  !isShowInfosBreakdown &&
-                  metadataDisplayHeaders.frames
-                "
-              >
-                {{ $t('shots.fields.nb_frames') }}
-              </div>
-              <div
-                class="frames-header"
-                v-if="
-                  isShotCasting &&
-                  isFrameIn &&
-                  !isShowInfosBreakdown &&
-                  metadataDisplayHeaders.frameIn
-                "
-              >
-                {{ $t('shots.fields.frame_in') }}
-              </div>
-              <div
-                class="frames-header"
-                v-if="
-                  isShotCasting &&
-                  isFrameOut &&
-                  !isShowInfosBreakdown &&
-                  metadataDisplayHeaders.frameOut
-                "
-              >
-                {{ $t('shots.fields.frame_out') }}
-              </div>
-              <div
-                class="descriptor-header"
-                :key="'descriptor-header-' + descriptor.id"
-                v-for="descriptor in visibleMetadataDescriptors"
-                v-if="!isShowInfosBreakdown"
-              >
-                <department-name
-                  :key="department.id"
-                  :department="department"
-                  :only-dot="true"
-                  :style="{ padding: '0px 0px' }"
-                  v-for="department in descriptorCurrentDepartments(descriptor)"
-                />
-                <span class="flexrow-item descriptor-name">
-                  {{ descriptor.name }}
-                </span>
-              </div>
-              <div
-                :key="assetType"
-                class="asset-type-header"
-                v-for="assetType in castingAssetTypes"
-              >
-                {{ assetType }}
-              </div>
+
+        <div class="flexrow mb05 list-options">
+          <table-metadata-selector-menu
+            ref="headerMetadataSelectorMenu"
+            namespace="breakdown"
+            :descriptors="metadataDescriptors"
+            :exclude="{
+              fps: true,
+              estimation: true,
+              resolution: true,
+              maxRetakes: true,
+              timeSpent: true
+            }"
+            :metadata-display-headers.sync="metadataDisplayHeaders"
+            v-if="isShowInfosBreakdown"
+            v-show="columnSelectorDisplayed"
+          />
+          <span class="filler"></span>
+
+          <button-simple
+            class="is-small mr05"
+            icon="down"
+            @click="toggleColumnSelector"
+            v-if="isShowInfosBreakdown"
+          />
+        </div>
+
+        <div
+          ref="casting-header"
+          class="casting-header flexrow"
+          v-scroll="onCastingHeaderScroll"
+          v-if="!isLoading"
+        >
+          <div
+            class="entity-header"
+            ref="name-header"
+            :style="{
+              'min-width': columnWidth.name ? columnWidth.name + 'px' : '250px'
+            }"
+          >
+            <div>
+              {{ $t('shots.fields.name') }}
             </div>
+            <div class="filler"></div>
+            <div
+              ref="resizable-knob-name"
+              class="resizable-knob"
+              @mousedown.prevent="
+                initResize('resizable-knob-name', 'name-header')
+              "
+            ></div>
+          </div>
+          <div class="standby-header" v-if="isShowInfosBreakdown">
+            {{ $t('breakdown.fields.standby') }}
+          </div>
+          <div
+            class="description-header"
+            v-if="isShowInfosBreakdown && isDescription"
+          >
+            {{ $t('shots.fields.description') }}
+          </div>
+          <div
+            class="frames-header"
+            v-if="
+              isShotCasting &&
+              isFrames &&
+              isShowInfosBreakdown &&
+              metadataDisplayHeaders.frames
+            "
+          >
+            {{ $t('shots.fields.nb_frames') }}
+          </div>
+          <div
+            class="frames-header"
+            v-if="
+              isShotCasting &&
+              isFrameIn &&
+              isShowInfosBreakdown &&
+              metadataDisplayHeaders.frameIn
+            "
+          >
+            {{ $t('shots.fields.frame_in') }}
+          </div>
+          <div
+            class="frames-header"
+            v-if="
+              isShotCasting &&
+              isFrameOut &&
+              isShowInfosBreakdown &&
+              metadataDisplayHeaders.frameOut
+            "
+          >
+            {{ $t('shots.fields.frame_out') }}
+          </div>
+          <div
+            class="descriptor-header"
+            :key="'descriptor-header-' + descriptor.id"
+            :ref="'descriptor-header-' + descriptor.id"
+            :style="{
+              'min-width': columnWidth[descriptor.id]
+                ? columnWidth[descriptor.id] + 'px'
+                : '110px'
+            }"
+            v-for="descriptor in visibleMetadataDescriptors"
+            v-show="isShowInfosBreakdown"
+          >
+            <div
+              class="mr1"
+              v-if="descriptorCurrentDepartments(descriptor).length"
+            >
+              <department-name
+                :key="department.id"
+                :department="department"
+                no-padding
+                only-dot
+                v-for="department in descriptorCurrentDepartments(descriptor)"
+              />
+            </div>
+            <span
+              class="flexrow-item ellipsis descriptor-name filler"
+              :title="descriptor.name"
+            >
+              {{ descriptor.name }}
+            </span>
+            <div
+              :ref="'resizable-knob-descriptor-' + descriptor.id"
+              class="resizable-knob"
+              @mousedown.prevent="
+                initResize(
+                  'resizable-knob-descriptor-',
+                  'descriptor-header-',
+                  descriptor.id
+                )
+              "
+            ></div>
+          </div>
+          <div
+            :key="assetType"
+            class="asset-type-header"
+            v-for="assetType in castingAssetTypes"
+          >
+            {{ assetType }}
+          </div>
+
+          <div class="actions filler"></div>
+        </div>
+
+        <div
+          ref="casting-list"
+          class="casting-list"
+          v-scroll="onCastingScroll"
+          v-if="!isLoading"
+        >
+          <div class="shot-lines">
             <shot-line
               :key="entity.id"
               :entity="entity"
@@ -162,12 +243,13 @@
               :big-mode="isBigMode"
               :is-description="isDescription"
               :is-save-error="saveErrors[entity.id]"
-              @edit-label="onEditLabelClicked"
+              :column-width="columnWidth"
               @add-one="addOneAsset"
-              @remove-one="removeOneAsset"
               @click="selectEntity"
-              @metadata-changed="onMetadataChanged"
               @description-changed="onDescriptionChanged"
+              @edit-label="onEditLabelClicked"
+              @metadata-changed="onMetadataChanged"
+              @remove-one="removeOneAssetFromSelection"
               @standby-changed="onStandbyChanged"
               v-for="entity in castingEntities"
             />
@@ -181,16 +263,26 @@
         class="breakdown-column assets-column"
         v-if="isCurrentUserManager"
       >
-        <h2 class="flexrow subtitle">
+        <h2 class="subtitle">
           {{ $t('breakdown.all_assets') }}
         </h2>
-        <div class="flexrow mb1 mt0">
-          <span class="filler"></span>
+        <div class="flexrow mt1 mb1">
           <button-simple
             class="flexrow-item"
             :title="$t('assets.new_asset')"
             icon="plus"
             @click="modals.isNewDisplayed = true"
+            v-if="!isOnlyCurrentEpisode"
+          />
+          <span class="filler"></span>
+
+          <button-simple
+            class="flexrow-item"
+            :text="$t('breakdown.show_library')"
+            icon="assets"
+            :is-on="libraryDisplayed"
+            @click="libraryDisplayed = !libraryDisplayed"
+            v-if="!isOnlyCurrentEpisode"
           />
           <button-simple
             class="flexrow-item"
@@ -203,15 +295,27 @@
 
         <div class="filters-area flexrow">
           <search-field
-            ref="search-field"
             class="flexrow-item"
+            ref="search-field"
+            :can-save="true"
+            @save="saveSearchQuery"
             @change="onSearchChange"
           />
           <button-simple
             class="flexrow-item"
             :title="$t('entities.build_filter.title')"
-            icon="funnel"
+            icon="filter"
             @click="modals.isBuildFilterDisplayed = true"
+          />
+        </div>
+        <div class="query-list">
+          <search-query-list
+            :groups="breakdownSearchFilterGroups"
+            :is-group-enabled="true"
+            :queries="breakdownSearchQueries"
+            type="breakdown"
+            @change-search="changeSearch"
+            @remove-search="removeSearchQuery"
           />
         </div>
 
@@ -235,6 +339,7 @@
               @add-one="addOneAsset"
               @add-ten="addTenAssets"
               v-for="asset in typeAssets"
+              v-show="libraryDisplayed || !asset.shared"
             />
           </div>
         </div>
@@ -249,7 +354,7 @@
       :parsed-csv="parsedCSV"
       :form-data="importCsvFormData"
       :columns="renderColumns"
-      :dataMatchers="dataMatchers"
+      :data-matchers="dataMatchers"
       :database="filteredCasting"
       :disable-update="true"
       @reupload="resetImport"
@@ -317,31 +422,37 @@
 import { mapGetters, mapActions } from 'vuex'
 import moment from 'moment'
 
-import { range } from '@/lib/time'
 import csv from '@/lib/csv'
 import clipboard from '@/lib/clipboard'
+import preferences from '@/lib/preferences'
 import stringHelpers from '@/lib/string'
+import { range } from '@/lib/time'
+import { searchMixin } from '@/components/mixins/search'
 import { entityListMixin } from '@/components/mixins/entity_list'
 
-import AvailableAssetBlock from '@/components/pages/breakdown/AvailableAssetBlock'
-import BuildFilterModal from '@/components/modals/BuildFilterModal'
-import ButtonHrefLink from '@/components/widgets/ButtonHrefLink'
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import ComboboxStyled from '@/components/widgets/ComboboxStyled'
-import DeleteModal from '@/components/modals/DeleteModal'
-import EditAssetModal from '@/components/modals/EditAssetModal'
-import EditLabelModal from '@/components/modals/EditLabelModal'
-import ImportRenderModal from '@/components/modals/ImportRenderModal'
-import ImportModal from '@/components/modals/ImportModal'
-import SearchField from '@/components/widgets/SearchField'
-import ShotLine from '@/components/pages/breakdown/ShotLine'
-import ShowInfosButton from '@/components/widgets/ShowInfosButton'
-import Spinner from '@/components/widgets/Spinner'
-import DepartmentName from '@/components/widgets/DepartmentName'
+import AvailableAssetBlock from '@/components/pages/breakdown/AvailableAssetBlock.vue'
+import BuildFilterModal from '@/components/modals/BuildFilterModal.vue'
+import ButtonHrefLink from '@/components/widgets/ButtonHrefLink.vue'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import ComboboxStyled from '@/components/widgets/ComboboxStyled.vue'
+import DeleteModal from '@/components/modals/DeleteModal.vue'
+import DepartmentName from '@/components/widgets/DepartmentName.vue'
+import EditAssetModal from '@/components/modals/EditAssetModal.vue'
+import EditLabelModal from '@/components/modals/EditLabelModal.vue'
+import ImportRenderModal from '@/components/modals/ImportRenderModal.vue'
+import ImportModal from '@/components/modals/ImportModal.vue'
+import SearchField from '@/components/widgets/SearchField.vue'
+import SearchQueryList from '@/components/widgets/SearchQueryList.vue'
+import ShotLine from '@/components/pages/breakdown/ShotLine.vue'
+import ShowInfosButton from '@/components/widgets/ShowInfosButton.vue'
+import Spinner from '@/components/widgets/Spinner.vue'
+import TableMetadataSelectorMenu from '@/components/widgets/TableMetadataSelectorMenu.vue'
 
 export default {
-  name: 'breakdown-page',
-  mixins: [entityListMixin],
+  name: 'breakdown',
+
+  mixins: [entityListMixin, searchMixin],
+
   components: {
     AvailableAssetBlock,
     BuildFilterModal,
@@ -355,15 +466,18 @@ export default {
     ImportModal,
     ImportRenderModal,
     SearchField,
+    SearchQueryList,
     ShotLine,
     ShowInfosButton,
-    Spinner
+    Spinner,
+    TableMetadataSelectorMenu
   },
 
   data() {
     return {
       assetTypeId: '',
       castingType: 'shot',
+      columnSelectorDisplayed: false,
       editedAsset: null,
       editedEntityId: null,
       editedAssetLinkLabel: null,
@@ -374,6 +488,7 @@ export default {
       isLoading: false,
       isOnlyCurrentEpisode: false,
       isTextMode: false,
+      libraryDisplayed: false,
       optionalCsvColumns: ['Label'],
       parsedCSV: [],
       removalData: {},
@@ -395,6 +510,17 @@ export default {
         remove: false,
         stay: false
       },
+      metadataDisplayHeaders: {
+        stdby: true,
+        fps: false,
+        frameIn: true,
+        frameOut: true,
+        frames: true,
+        estimation: false,
+        maxRetakes: false,
+        resolution: false,
+        timeSpent: false
+      },
       modals: {
         isBuildFilterDisplayed: false,
         isEditLabelDisplayed: false,
@@ -405,7 +531,8 @@ export default {
       },
       success: {
         edit: false
-      }
+      },
+      columnWidth: {}
     }
   },
 
@@ -413,9 +540,13 @@ export default {
     if (!this.isLoading) {
       this.reset()
     }
+    this.resetSequenceOption()
     this.setLastProductionScreen('breakdown')
-    this.isTextMode = localStorage.getItem('breakdown:text-mode') === 'true'
+    this.isTextMode = preferences.getBoolPreference('breakdown:text-mode')
     window.addEventListener('keydown', this.onKeyDown, false)
+
+    this.resetDisplayHeaders()
+    this.resetColumnWidth()
   },
 
   beforeDestroy() {
@@ -428,6 +559,8 @@ export default {
       'assetMetadataDescriptors',
       'assetTypeMap',
       'assetsByType',
+      'breakdownSearchQueries',
+      'breakdownSearchFilterGroups',
       'casting',
       'castingAssetTypeAssets',
       'castingAssetTypesOptions',
@@ -455,6 +588,10 @@ export default {
       'shotMap',
       'shotMetadataDescriptors'
     ]),
+
+    searchField() {
+      return this.$refs['search-field']
+    },
 
     castingTypeOptions() {
       const isAssetsOnly = this.currentProduction.production_type === 'assets'
@@ -487,8 +624,7 @@ export default {
           newGroup = typeGroup.filter(asset => {
             return (
               asset.episode_id === this.currentEpisode.id ||
-              (asset.casting_episode_ids &&
-                asset.casting_episode_ids.includes(this.currentEpisode.id))
+              asset.casting_episode_ids?.includes(this.currentEpisode.id)
             )
           })
         }
@@ -528,11 +664,15 @@ export default {
       } else if (this.isShotCasting) {
         return this.castingSequenceShots
       } else {
-        if (this.isTVShow && this.currentEpisode.id !== 'main') {
+        if (
+          this.isTVShow &&
+          this.currentEpisode &&
+          this.currentEpisode.id !== 'main'
+        ) {
           return this.castingAssetTypeAssets.filter(
             asset =>
               asset.episode_id === this.currentEpisode.id ||
-              asset.casting_episode_ids.includes(this.currentEpisode.id)
+              asset.casting_episode_ids?.includes(this.currentEpisode.id)
           )
         } else if (this.isTVShow && this.currentEpisode.id === 'main') {
           return this.castingAssetTypeAssets.filter(asset => !asset.episode_id)
@@ -584,7 +724,7 @@ export default {
     },
 
     csvColumns() {
-      return this.isTVShow
+      return this.isTVShow && this.currentEpisode?.id !== 'all'
         ? ['Episode', 'Parent', 'Name', 'Asset Type', 'Asset', 'Occurences']
         : ['Parent', 'Name', 'Asset Type', 'Asset', 'Occurences']
     },
@@ -607,29 +747,6 @@ export default {
       } else {
         return this.assetMetadataDescriptors
       }
-    },
-
-    metadataDisplayHeaders() {
-      if (this.isEpisodeCasting) {
-        return {}
-      } else if (this.isShotCasting) {
-        return {
-          fps: false,
-          frameIn: true,
-          frameOut: true,
-          frames: true,
-          estimation: false,
-          maxRetakes: false,
-          resolution: false,
-          timeSpent: false
-        }
-      } else {
-        return {
-          estimation: false,
-          readyFor: false,
-          timeSpent: false
-        }
-      }
     }
   },
 
@@ -648,6 +765,10 @@ export default {
       'loadShots',
       'newAsset',
       'removeAssetFromCasting',
+      'removeBreakdownSearch',
+      'saveBreakdownSearch',
+      'loadSequences',
+      'saveBreakdownSearchFilterGroup',
       'saveCasting',
       'setAssetLinkLabel',
       'setAssetSearch',
@@ -678,36 +799,43 @@ export default {
       }, 100)
     },
 
-    reloadEntities() {
+    async reloadEntities() {
       this.isLoading = true
-      this.loadShots(() => {
-        if (this.isTVShow) {
-          if (this.currentEpisode) {
-            this.episodeId = this.currentEpisode.id
-          }
-          this.setCastingEpisode(this.episodeId)
-          this.setCastingForProductionEpisodes()
-        } else {
-          this.setCastingEpisode(null)
+      await this.loadSequences()
+      await this.loadShots()
+      if (this.isTVShow) {
+        if (this.currentEpisode) {
+          this.episodeId = this.currentEpisode.id
         }
-        this.loadAssets(true).then(() => {
-          this.isLoading = false
-          this.displayMoreAssets()
-          this.setCastingAssetTypes()
-          if (this.assetTypeId) {
-            this.setCastingAssetType(this.assetTypeId)
-          } else {
-            this.setCastingSequence(this.sequenceId || 'all')
-          }
-          this.resetSelection()
-          if (
-            (this.currentEpisode && this.currentEpisode.id === 'main') ||
-            this.currentProduction.production_type === 'assets'
-          ) {
-            this.castingType = 'asset'
-          }
-        })
+        this.setCastingEpisode(this.episodeId)
+        this.setCastingForProductionEpisodes()
+      } else {
+        this.setCastingEpisode(null)
+      }
+      this.loadAssets({ all: true, withTasks: true }).then(() => {
+        this.isLoading = false
+        this.displayMoreAssets()
+        this.setCastingAssetTypes()
+        if (this.assetTypeId) {
+          this.setCastingAssetType(this.assetTypeId)
+        } else {
+          this.setCastingSequence(this.sequenceId || 'all')
+        }
+        this.resetSequenceOption()
+        this.resetSelection()
+        if (
+          (this.currentEpisode && this.currentEpisode.id === 'main') ||
+          this.currentProduction.production_type === 'assets'
+        ) {
+          this.castingType = 'asset'
+        }
       })
+    },
+
+    resetSequenceOption() {
+      if (this.currentProduction.production_style === 'nft') {
+        this.sequenceId = this.castingSequencesOptions[1].value
+      }
     },
 
     resetSelection() {
@@ -800,41 +928,34 @@ export default {
       }
     },
 
-    addOneAsset(assetId) {
+    async addOneAsset(assetId, amount = 1) {
       this.isLocked = true
-      Object.keys(this.selection)
-        .filter(key => this.selection[key])
-        .forEach(entityId => {
-          this.addAssetToCasting({
-            entityId,
-            assetId,
-            nbOccurences: 1,
-            label: this.castingType === 'shot' ? 'animate' : 'fixed'
-          })
-          delete this.saveErrors[entityId]
-          this.saveCasting(entityId)
-            .then(this.setLock)
-            .catch(err => {
-              this.saveErrors[entityId] = true
-              console.error(err)
-            })
+      const entityIds = Object.keys(this.selection).filter(
+        key => this.selection[key]
+      )
+
+      for (const entityId of entityIds) {
+        this.addAssetToCasting({
+          entityId,
+          assetId,
+          nbOccurences: amount,
+          label: this.castingType === 'shot' ? 'animate' : 'fixed'
         })
+
+        delete this.saveErrors[entityId]
+
+        try {
+          await this.saveCasting(entityId)
+          this.setLock()
+        } catch (err) {
+          this.saveErrors[entityId] = true
+          console.error(err)
+        }
+      }
     },
 
-    addTenAssets(assetId) {
-      this.isLocked = true
-      Object.keys(this.selection)
-        .filter(key => this.selection[key])
-        .forEach(entityId => {
-          this.addAssetToCasting({ entityId, assetId, nbOccurences: 10 })
-          delete this.saveErrors[entityId]
-          this.saveCasting(entityId)
-            .then(this.setLock)
-            .catch(err => {
-              this.saveErrors[entityId] = true
-              console.error(err)
-            })
-        })
+    async addTenAssets(assetId) {
+      this.addOneAsset(assetId, 10)
     },
 
     confirmAssetRemoval() {
@@ -849,7 +970,7 @@ export default {
       this.loading.remove = true
       this.removeAssetFromCasting({ entityId, assetId, nbOccurences })
       delete this.saveErrors[entityId]
-      this.saveCasting(entityId)
+      return this.saveCasting(entityId)
         .then(() => {
           this.setLock()
           this.modals.isRemoveConfirmationDisplayed = false
@@ -864,23 +985,28 @@ export default {
         })
     },
 
+    async removeOneAssetFromSelection(assetId) {
+      const entityIds = Object.keys(this.selection).filter(
+        key => this.selection[key]
+      )
+      for (const entityId of entityIds) {
+        const asset = this.casting[entityId].find(
+          asset => asset.asset_id === assetId
+        )
+        if (asset) {
+          await this.removeOneAsset(assetId, entityId, asset.nb_occurences)
+        }
+      }
+    },
+
     removeOneAsset(assetId, entityId, nbOccurences) {
       this.isLocked = true
       if (this.isEpisodeCasting && nbOccurences === 1) {
         this.removalData = { assetId, entityId, nbOccurences }
         this.modals.isRemoveConfirmationDisplayed = true
+        return Promise.resolve()
       } else {
-        this.saveAssetRemoval(entityId, assetId, 1)
-      }
-    },
-
-    removeTenAssets(assetId, entityId, nbOccurences) {
-      this.isLocked = true
-      if (this.isEpisodeCasting && nbOccurences < 10) {
-        this.removalData = { assetId, entityId, nbOccurences }
-        this.modals.isRemoveConfirmationDisplayed = true
-      } else {
-        this.saveAssetRemoval(entityId, assetId, 10)
+        return this.saveAssetRemoval(entityId, assetId, 1)
       }
     },
 
@@ -925,7 +1051,8 @@ export default {
     uploadImportFile(data) {
       const formData = new FormData()
       const filename = 'import.csv'
-      const file = new File([data.join('\n')], filename, { type: 'text/csv' })
+      const csvContent = csv.turnEntriesToCsvString(data)
+      const file = new File([csvContent], filename, { type: 'text/csv' })
 
       formData.append('file', file)
 
@@ -975,7 +1102,7 @@ export default {
           }
         }
       } else if (this.isAssetCasting) {
-        const assetTypeId = this.$route.params.asset_type_id
+        const assetTypeId = this.$route.params.asset_type_id || ''
         if (assetTypeId !== this.assetTypeId) {
           isChange = true
           route = {
@@ -1044,6 +1171,10 @@ export default {
       localStorage.setItem('breakdown:text-mode', this.isTextMode)
     },
 
+    toggleColumnSelector() {
+      this.columnSelectorDisplayed = !this.columnSelectorDisplayed
+    },
+
     confirmNewAssetStay(form) {
       this.loading.stay = true
       this.success.edit = false
@@ -1090,10 +1221,10 @@ export default {
 
     onKeyDown(event) {
       if (!['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
-        if (event.ctrlKey && event.keyCode === 67) {
+        if ((event.ctrlKey || event.metaKey) && event.keyCode === 67) {
           // ctrl + c
           this.copyCasting()
-        } else if (event.ctrlKey && event.keyCode === 86) {
+        } else if ((event.ctrlKey || event.metaKey) && event.keyCode === 86) {
           // ctrl + v
           this.pasteCasting()
         }
@@ -1108,25 +1239,25 @@ export default {
       clipboard.copyCasting(selectedCasting)
     },
 
-    pasteCasting() {
+    async pasteCasting() {
       const castingToPaste = clipboard.pasteCasting()
       if (!castingToPaste || castingToPaste.length === 0) return
       const selectedElements = Object.keys(this.selection).filter(
         key => this.selection[key]
       )
-      selectedElements.forEach(entityId => {
+      for (const entityId of selectedElements) {
         this.setEntityCasting({
           entityId,
           casting: castingToPaste
         })
         delete this.saveErrors[entityId]
-        this.saveCasting(entityId)
+        await this.saveCasting(entityId)
           .then(this.setLock)
           .catch(err => {
             this.saveErrors[entityId] = true
             console.error(err)
           })
-      })
+      }
       return castingToPaste
     },
 
@@ -1198,11 +1329,11 @@ export default {
       ]
       if (this.isTVShow) {
         if (this.currentEpisode) {
-          if (this.currentEpisode.id == 'all') {
+          if (this.currentEpisode.id === 'all') {
             nameData.splice(4, 0, 'all')
-          } else if (this.currentEpisode.id == 'main') {
+          } else if (this.currentEpisode.id === 'main') {
             nameData.splice(4, 0, 'main pack')
-            if (this.assetTypeId !== 'all' && this.castingType == 'asset') {
+            if (this.assetTypeId !== 'all' && this.castingType === 'asset') {
               nameData.splice(
                 5,
                 0,
@@ -1211,10 +1342,10 @@ export default {
             }
           } else {
             nameData.splice(4, 0, this.currentEpisode.name)
-            if (this.sequenceId !== 'all' && this.castingType == 'shot') {
+            if (this.sequenceId !== 'all' && this.castingType === 'shot') {
               nameData.splice(5, 0, this.sequenceMap.get(this.sequenceId).name)
             }
-            if (this.assetTypeId !== 'all' && this.castingType == 'asset') {
+            if (this.assetTypeId !== 'all' && this.castingType === 'asset') {
               nameData.splice(
                 5,
                 0,
@@ -1224,10 +1355,10 @@ export default {
           }
         }
       } else {
-        if (this.sequenceId !== 'all' && this.castingType == 'shot') {
+        if (this.sequenceId !== 'all' && this.castingType === 'shot') {
           nameData.splice(5, 0, this.sequenceMap.get(this.sequenceId).name)
         }
-        if (this.assetTypeId !== 'all' && this.castingType == 'asset') {
+        if (this.assetTypeId !== 'all' && this.castingType === 'asset') {
           nameData.splice(5, 0, this.assetTypeMap.get(this.assetTypeId).name)
         }
       }
@@ -1304,12 +1435,120 @@ export default {
       const name = this.getCsvFileName()
       const headers = this.getCsvFileHeaders()
       csv.buildCsvFile(name, [headers].concat(entries))
+    },
+
+    removeSearchQuery(searchQuery) {
+      this.removeBreakdownSearch(searchQuery).catch(console.error)
+    },
+
+    saveSearchQuery(searchQuery) {
+      if (this.loading.savingSearch) {
+        return
+      }
+      this.loading.savingSearch = true
+      this.saveBreakdownSearch(searchQuery)
+        .catch(console.error)
+        .finally(() => {
+          this.loading.savingSearch = false
+        })
+    },
+
+    initResize(knobRefName, refName, descriptorId) {
+      this.resizedKnobRefName = knobRefName + (descriptorId ? descriptorId : '')
+      this.resizedRefName = refName + (descriptorId ? descriptorId : '')
+      this.resizedDescriptorId = descriptorId
+      window.addEventListener('mousemove', this.startResizing)
+      window.addEventListener('mouseup', this.stopResizing)
+    },
+
+    startResizing(event) {
+      const knobRef = this.resizedKnobRefName
+      const headerRef = this.resizedRefName
+      const knob = this.$refs[knobRef][0]
+        ? this.$refs[knobRef][0]
+        : this.$refs[knobRef]
+      const header = this.$refs[headerRef][0]
+        ? this.$refs[headerRef][0]
+        : this.$refs[headerRef]
+      const diff = event.clientX - knob.getBoundingClientRect().left
+      const actualWidth = header.getBoundingClientRect().width
+      this.columnWidth = { ...this.columnWidth }
+      if (this.resizedDescriptorId) {
+        const newWidth = Math.max(actualWidth + diff, 110)
+        this.columnWidth[this.resizedDescriptorId] = newWidth
+        const preferenceKey = `breakdown:column-width-descriptor-${this.resizedDescriptorId}`
+        preferences.setPreference(preferenceKey, newWidth)
+      } else {
+        const newWidth = Math.max(actualWidth + diff, 160)
+        this.columnWidth.name = newWidth
+        const preferenceKey =
+          'breakdown:column-width-name-' +
+          `${this.castingType}-${this.currentProduction.id}`
+        preferences.setPreference(preferenceKey, newWidth)
+      }
+    },
+
+    stopResizing() {
+      window.removeEventListener('mousemove', this.startResizing)
+      window.removeEventListener('mouseup', this.stopResizing)
+      this.resizedKnobRefName = null
+      this.resizedRefName = null
+      this.resizedDescriptorId = null
+    },
+
+    resetDisplayHeaders() {
+      if (this.isEpisodeCasting) {
+        this.metadataDisplayHeaders = {}
+      } else if (this.isShotCasting) {
+        this.metadataDisplayHeaders = {
+          stdby: true,
+          fps: false,
+          frameIn: true,
+          frameOut: true,
+          frames: true,
+          estimation: false,
+          maxRetakes: false,
+          resolution: false,
+          timeSpent: false
+        }
+      } else {
+        this.metadataDisplayHeaders = {
+          estimation: false,
+          readyFor: false,
+          timeSpent: false
+        }
+      }
+    },
+
+    resetColumnWidth() {
+      const namePreferenceKey =
+        'breakdown:column-width-name-' +
+        `${this.castingType}-${this.currentProduction.id}`
+      const nameColumnWidth = preferences.getPreference(namePreferenceKey)
+      if (nameColumnWidth) {
+        this.columnWidth.name = nameColumnWidth
+      }
+
+      this.metadataDescriptors.forEach(descriptor => {
+        const descriptorColumnWidth = preferences.getPreference(
+          `breakdown:column-width-descriptor-${descriptor.id}`
+        )
+        if (descriptorColumnWidth) {
+          this.columnWidth[descriptor.id] = descriptorColumnWidth
+        }
+      })
+    },
+
+    onCastingHeaderScroll(event, position) {
+      this.$refs['casting-list'].scrollLeft = position.scrollLeft
+    },
+
+    onCastingScroll(event, position) {
+      this.$refs['casting-header'].scrollLeft = position.scrollLeft
     }
   },
 
   watch: {
-    $route() {},
-
     castingType() {
       if (this.isShotCasting && this.displayedSequences.length > 0) {
         this.sequenceId = this.displayedSequences[0].id
@@ -1325,6 +1564,8 @@ export default {
           this.assetTypeId = this.castingAssetTypesOptions[0].value
         }
       }
+      this.resetDisplayHeaders()
+      this.resetColumnWidth()
     },
 
     sequenceId() {
@@ -1387,6 +1628,7 @@ export default {
     currentProduction() {
       if (!this.isLoading) {
         this.reset()
+        this.resetColumnWidth()
       }
     },
 
@@ -1455,11 +1697,12 @@ export default {
   .breakdown-column {
     background: $dark-grey-light;
     border: 1px solid #222;
-    box-shadow: 0px 0px 6px #222;
+    box-shadow: 0 0 6px #222;
   }
 }
 
 .breakdown {
+  color: var(--text);
   position: fixed;
   left: 0;
   right: 0;
@@ -1489,7 +1732,7 @@ export default {
   padding: 1em;
   background: white;
   border: 1px solid #eee;
-  box-shadow: 0px 0px 6px #e0e0e0;
+  box-shadow: 0 0 6px #e0e0e0;
   border-radius: 1em;
 
   &:not(:first-child) {
@@ -1532,11 +1775,12 @@ export default {
 
 .subtitle {
   border-bottom: 0;
-  margin-top: 0;
+  margin-top: 0.1em;
+  margin-bottom: 0;
 }
 
 .filters-area {
-  margin-bottom: 2em;
+  margin-bottom: 0.5em;
 
   .search-field-wrapper {
     margin-right: 0.5em;
@@ -1569,8 +1813,8 @@ export default {
 .frames-header {
   min-width: 81px;
   max-width: 81px;
-  text-align: right;
-  padding-right: 0.5em;
+  justify-content: right;
+  padding-right: 0.6em;
 }
 
 .asset-type-header {
@@ -1580,14 +1824,15 @@ export default {
 }
 
 .standby-header {
-  max-width: 80px;
-  min-width: 80px;
+  max-width: 60px;
+  min-width: 60px;
   text-align: center;
   justify-content: center;
-  padding-left: 0px;
+  padding-left: 0;
 }
 
 .entity-header {
+  border-top-left-radius: 10px;
   border-right: 2px solid $light-grey;
   margin: 0;
   max-width: 301px;
@@ -1597,13 +1842,22 @@ export default {
   position: sticky;
 }
 
-.header {
+.actions {
+  border-top-right-radius: 10px;
+  height: 45px;
+  text-align: right;
+}
+
+.casting-header {
+  background: white;
   border-bottom: 2px solid $light-grey;
   font-size: 1.1em;
   color: var(--text-alt);
   font-size: 0.9em;
   font-weight: 600;
   letter-spacing: 1px;
+  min-height: 40px;
+  overflow-y: hidden;
   padding: 0;
   position: sticky;
   top: 0;
@@ -1615,14 +1869,45 @@ export default {
     padding-top: 0.5em;
     padding-bottom: 0.5em;
   }
+
+  .actions {
+    height: 100%;
+  }
+
+  .dark & {
+    background: $dark-grey-light;
+  }
+}
+
+.list-options {
+  position: relative;
+}
+
+.casting-header div.resizable-knob {
+  cursor: col-resize;
+  height: 142%;
+  width: 5px;
+
+  &:hover {
+    background: $grey;
+  }
 }
 
 .casting-list {
   overflow: auto;
   display: flex;
 
-  .mt1 {
+  .shot-lines {
     flex: 1;
   }
+
+  .actions {
+    width: 100%;
+    text-align: right;
+  }
+}
+
+.query-list {
+  margin-bottom: 0.5em;
 }
 </style>

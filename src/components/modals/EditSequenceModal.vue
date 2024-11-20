@@ -9,20 +9,26 @@
 
     <div class="modal-content">
       <div class="box">
-        <h1 class="title" v-if="sequenceToEdit && this.sequenceToEdit.id">
+        <h1 class="title" v-if="sequenceToEdit && sequenceToEdit.id">
           {{ $t('sequences.edit_title') }} {{ sequenceToEdit.name }}
         </h1>
         <h1 class="title" v-else>
           {{ $t('sequences.new_sequence') }}
         </h1>
 
-        <form v-on:submit.prevent>
+        <form @submit.prevent>
           <text-field
             ref="nameField"
             :label="$t('sequences.fields.name')"
-            v-model="form.name"
+            v-model.trim="form.name"
             @enter="runConfirmation"
             v-focus
+          />
+          <text-field
+            ref="resolutionField"
+            :label="$t('shots.fields.resolution')"
+            v-model="form.data.resolution"
+            @enter="runConfirmation"
           />
           <textarea-field
             ref="descriptionField"
@@ -31,7 +37,6 @@
             @keyup.meta.enter="runConfirmation"
             v-model="form.description"
           />
-
           <metadata-field
             :key="descriptor.id"
             :descriptor="descriptor"
@@ -56,16 +61,18 @@
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
+import { mapGetters } from 'vuex'
+
 import { modalMixin } from '@/components/modals/base_modal'
 
-import MetadataField from '@/components/widgets/MetadataField'
-import ModalFooter from '@/components/modals/ModalFooter'
-import TextField from '@/components/widgets/TextField'
-import TextareaField from '@/components/widgets/TextareaField'
+import MetadataField from '@/components/widgets/MetadataField.vue'
+import ModalFooter from '@/components/modals/ModalFooter.vue'
+import TextField from '@/components/widgets/TextField.vue'
+import TextareaField from '@/components/widgets/TextareaField.vue'
 
 export default {
   name: 'edit-sequence-modal',
+
   mixins: [modalMixin],
 
   components: {
@@ -102,7 +109,11 @@ export default {
           name: this.sequenceToEdit.name,
           description: this.sequenceToEdit.description,
           production_id: this.sequenceToEdit.project_id,
-          data: this.sequenceToEdit.data || {}
+          data:
+            {
+              ...this.sequenceToEdit.data,
+              resolution: this.sequenceToEdit.data.resolution || ''
+            } || {}
         },
         sequenceSuccessText: ''
       }
@@ -112,7 +123,9 @@ export default {
           id: '',
           name: '',
           description: '',
-          data: {}
+          data: {
+            resolution: ''
+          }
         },
         sequenceSuccessText: ''
       }
@@ -124,8 +137,6 @@ export default {
   },
 
   methods: {
-    ...mapActions([]),
-
     runConfirmation() {
       this.confirmClicked()
     },
@@ -144,12 +155,19 @@ export default {
         this.form.id = null
         this.form.name = ''
         this.form.description = ''
+        this.form.data = {
+          resolution: ''
+        }
       } else {
         this.form = {
           id: this.sequenceToEdit.id,
           name: this.sequenceToEdit.name,
           description: this.sequenceToEdit.description,
-          data: this.sequenceToEdit.data || {}
+          data:
+            {
+              ...this.sequenceToEdit.data,
+              resolution: this.sequenceToEdit.data.resolution || ''
+            } || {}
         }
       }
     }

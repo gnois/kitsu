@@ -1,4 +1,3 @@
-import Vue from 'vue/dist/vue'
 import peopleApi from '@/store/api/people'
 import peopleStore from '@/store/modules/people'
 import taskStatusStore from '@/store/modules/taskstatus'
@@ -43,6 +42,9 @@ import {
   LOAD_USER_FILTERS_END,
   LOAD_USER_FILTERS_ERROR,
   UPDATE_USER_FILTER,
+  LOAD_USER_FILTER_GROUPS_END,
+  LOAD_USER_FILTER_GROUPS_ERROR,
+  UPDATE_USER_FILTER_GROUP,
   SAVE_TODO_SEARCH_END,
   REMOVE_TODO_SEARCH_END,
   ADD_SELECTED_TASK,
@@ -57,9 +59,13 @@ import {
   SET_TODO_LIST_SCROLL_POSITION,
   SAVE_ASSET_SEARCH_END,
   SAVE_SHOT_SEARCH_END,
-  REMOVE_ASSET_SEARCH_END,
+  SAVE_EDIT_SEARCH_END,
+  SAVE_SEQUENCE_SEARCH_END,
+  SAVE_BREAKDOWN_SEARCH_END,
   LOAD_PRODUCTION_STATUS_END,
+  LOAD_BACKGROUNDS_END,
   LOAD_DEPARTMENTS_END,
+  LOAD_STUDIOS_END,
   LOAD_TASK_STATUSES_END,
   LOAD_TASK_TYPES_END,
   LOAD_PEOPLE_END,
@@ -109,6 +115,7 @@ const initialState = {
   todoSelectionGrid: {},
   todoSearchQueries: [],
   userFilters: {},
+  userFilterGroups: {},
   todoListScrollPosition: 0,
 
   timeSpentMap: {},
@@ -144,6 +151,7 @@ const getters = {
   todoSelectionGrid: state => state.todoSelectionGrid,
   todoSearchQueries: state => state.todoSearchQueries,
   userFilters: state => state.userFilters,
+  userFilterGroups: state => state.userFilterGroups,
   isTodosLoading: state => state.isTodosLoading,
   isTodosLoadingError: state => state.isTodosLoadingError,
   todoListScrollPosition: state => state.todoListScrollPosition,
@@ -269,74 +277,57 @@ const actions = {
     return peopleApi.newRecoveryCodes(coerceTwoFactorPayload(twoFactorPayload))
   },
 
-  loadTodos({ commit, state, rootGetters }, { callback, forced, date }) {
+  async loadTodos({ commit, state, rootGetters }, { date, forced = false }) {
     const userFilters = rootGetters.userFilters
     const taskTypeMap = rootGetters.taskTypeMap
 
     if (state.todos.length === 0 || forced) {
       commit(USER_LOAD_TODOS_START)
-      peopleApi.loadTodos((err, tasks) => {
-        if (err) {
-          commit(USER_LOAD_TODOS_ERROR)
-          if (callback) callback(err)
-        } else {
-          peopleApi.loadDone((err, doneTasks) => {
-            if (err) {
-              commit(USER_LOAD_TODOS_ERROR)
-            } else {
-              commit(USER_LOAD_DONE_TASKS_END, doneTasks)
-            }
-
-            return peopleApi
-              .loadTimeSpents(date)
-              .then(timeSpents => {
-                commit(USER_LOAD_TIME_SPENTS_END, timeSpents)
-                commit(USER_LOAD_TODOS_END, { tasks, userFilters, taskTypeMap })
-                commit(REGISTER_USER_TASKS, { tasks })
-                return peopleApi.getDayOff(state.user.id, date)
-              })
-              .then(dayOff => {
-                commit(PERSON_SET_DAY_OFF, dayOff)
-                if (callback) callback()
-              })
-              .catch(err => {
-                console.error(err)
-                commit(USER_LOAD_TODOS_ERROR)
-              })
-          })
-        }
-      })
-    } else {
-      if (callback) callback()
+      try {
+        const tasks = await peopleApi.loadTodos()
+        const doneTasks = await peopleApi.loadDone()
+        const timeSpents = await peopleApi.loadTimeSpents(date)
+        const dayOff = await peopleApi.getDayOff(state.user.id, date)
+        commit(USER_LOAD_TODOS_END, { tasks, userFilters, taskTypeMap })
+        commit(REGISTER_USER_TASKS, { tasks: tasks.concat(doneTasks) })
+        commit(USER_LOAD_DONE_TASKS_END, doneTasks)
+        commit(USER_LOAD_TIME_SPENTS_END, timeSpents)
+        commit(PERSON_SET_DAY_OFF, dayOff)
+      } catch (err) {
+        console.error(err)
+        commit(USER_LOAD_TODOS_ERROR)
+      }
     }
   },
 
-  loadTasksToCheck({ commit }) {
-    return peopleApi.loadTasksToCheck().then(tasks => {
-      commit(REGISTER_USER_TASKS, { tasks })
-      return Promise.resolve(tasks)
-    })
+  async loadTasksToCheck({ commit }) {
+    const tasks = await peopleApi.loadTasksToCheck()
+    commit(REGISTER_USER_TASKS, { tasks })
+    return tasks
   },
 
-  uploadAvatar({ commit, state }, callback) {
-    peopleApi.postAvatar(state.user.id, state.avatarFormData, err => {
-      if (!err) commit(UPLOAD_AVATAR_END, state.user.id)
-      if (callback) callback(err)
-    })
+  async uploadAvatar({ commit, state }) {
+    await peopleApi.postAvatar(state.user.id, state.avatarFormData)
+    commit(UPLOAD_AVATAR_END, state.user.id)
   },
 
-  clearAvatar({ commit, state }) {
-    commit(CLEAR_AVATAR)
-    return peopleApi.clearAvatar()
+  async clearAvatar({ commit, state }) {
+    await peopleApi.clearAvatar()
+    commit(CLEAR_AVATAR, state.user.id)
   },
 
   setTodosSearch({ commit, state }, searchText) {
     commit(SET_TODOS_SEARCH, searchText)
   },
 
-  updateSearchFilter({ commit }, searchFilter) {
+  async updateSearchFilterGroup({ commit }, searchFilterGroup) {
+    await peopleApi.updateFilterGroup(searchFilterGroup)
+    commit(UPDATE_USER_FILTER_GROUP, searchFilterGroup)
+  },
+
+  async updateSearchFilter({ commit }, searchFilter) {
+    await peopleApi.updateFilter(searchFilter)
     commit(UPDATE_USER_FILTER, searchFilter)
-    return peopleApi.updateFilter(searchFilter)
   },
 
   loadUserSearchFilters({ commit }, callback) {
@@ -345,29 +336,30 @@ const actions = {
       else commit(LOAD_USER_FILTERS_END, searchFilters)
       callback(err)
     })
+    // return peopleApi.getUserSearchFilters()
+    // .then((searchFilters) => {
+    //   commit(LOAD_USER_FILTERS_END, searchFilters);
+    // })
+    // .catch((err) => {
+    //   commit(LOAD_USER_FILTERS_ERROR);
+    // })
   },
 
   saveTodoSearch({ commit, rootGetters }, searchQuery) {
-    const query = state.todoSearchQueries.find(
-      query => query.name === searchQuery
-    )
-
-    if (!query) {
-      return peopleApi
-        .createFilter('todos', searchQuery, searchQuery, null, null)
-        .then(searchQuery => {
-          commit(SAVE_TODO_SEARCH_END, { searchQuery })
-          return Promise.resolve(searchQuery)
-        })
-    } else {
-      return Promise.resolve()
+    if (state.todoSearchQueries.some(query => query.name === searchQuery)) {
+      return
     }
+    return peopleApi
+      .createFilter('todos', searchQuery, searchQuery, null, null)
+      .then(searchQuery => {
+        commit(SAVE_TODO_SEARCH_END, { searchQuery })
+        return searchQuery
+      })
   },
 
-  removeTodoSearch({ commit, rootGetters }, searchQuery) {
+  removeTodoSearch({ commit }, searchQuery) {
     return peopleApi.removeFilter(searchQuery).then(() => {
       commit(REMOVE_TODO_SEARCH_END, { searchQuery })
-      return Promise.resolve(searchQuery)
     })
   },
 
@@ -375,11 +367,14 @@ const actions = {
     commit(SET_TODO_LIST_SCROLL_POSITION, scrollPosition)
   },
 
-  loadContext({ commit, rootGetters }, callback) {
+  loadContext({ commit, rootGetters }) {
     return peopleApi.getContext().then(context => {
       commit(LOAD_USER_FILTERS_END, context.search_filters)
+      commit(LOAD_USER_FILTER_GROUPS_END, context.search_filter_groups)
       commit(LOAD_PRODUCTION_STATUS_END, context.project_status)
       commit(LOAD_DEPARTMENTS_END, context.departments)
+      commit(LOAD_STUDIOS_END, context.studios)
+      commit(LOAD_BACKGROUNDS_END, context.preview_background_files)
       commit(LOAD_TASK_STATUSES_END, context.task_status)
       commit(LOAD_PEOPLE_END, {
         people: context.persons,
@@ -404,11 +399,11 @@ const mutations = {
     state.user = peopleStore.helpers.addAdditionalInformation(user)
     state.isAuthenticated = true
   },
-  [USER_LOGOUT](state, user) {
+  [USER_LOGOUT](state) {
     state.user = null
     state.isAuthenticated = false
   },
-  [USER_LOGIN_FAIL](state, user) {
+  [USER_LOGIN_FAIL](state) {
     state.user = null
     state.isAuthenticated = false
   },
@@ -596,10 +591,9 @@ const mutations = {
 
   [UPLOAD_AVATAR_END](state) {
     if (state.user) {
-      const randomHash = Math.random().toString(36).substring(7)
+      const timestamp = Date.now()
+      state.user.avatarPath = `/api/pictures/thumbnails/persons/${state.user.id}.png?t=${timestamp}`
       state.user.has_avatar = true
-      Vue.set(state.user, 'uniqueHash', randomHash)
-      state.user.avatarPath = `/api/pictures/thumbnails/persons/${state.user.id}.png`
     }
   },
 
@@ -701,6 +695,27 @@ const mutations = {
     })
   },
 
+  [LOAD_USER_FILTER_GROUPS_ERROR](state) {},
+  [LOAD_USER_FILTER_GROUPS_END](state, userFilterGroups) {
+    state.userFilterGroups = userFilterGroups
+  },
+  [UPDATE_USER_FILTER_GROUP](state, userFilterGroup) {
+    Object.keys(state.userFilterGroups).forEach(typeName => {
+      Object.keys(state.userFilterGroups[typeName]).forEach(projectId => {
+        const projectFilterGroups = state.userFilterGroups[typeName][projectId]
+        const filterGroup = projectFilterGroups.find(
+          f => f.id === userFilterGroup.id
+        )
+        if (filterGroup) {
+          Object.assign(filterGroup, userFilterGroup)
+          state.userFilters?.[typeName]?.[projectId].forEach(filter => {
+            filter.is_shared = userFilterGroup.is_shared
+          })
+        }
+      })
+    })
+  },
+
   [SET_TIME_SPENT](state, timeSpent) {
     if (state.user.id === timeSpent.person_id) {
       state.timeSpentMap[timeSpent.task_id] = timeSpent
@@ -756,10 +771,55 @@ const mutations = {
     }
   },
 
-  [REMOVE_ASSET_SEARCH_END](state) {},
+  [SAVE_EDIT_SEARCH_END](state, { searchQuery, production }) {
+    if (!state.userFilters.edit) {
+      state.userFilters.edit = {}
+    }
+    if (!state.userFilters.edit[production.id]) {
+      state.userFilters.edit[production.id] = []
+    }
+    if (!state.userFilters.edit[production.id].includes(searchQuery)) {
+      state.userFilters.edit[production.id].push(searchQuery)
+      state.userFilters.edit[production.id] = sortByName(
+        state.userFilters.edit[production.id]
+      )
+    }
+  },
 
-  [CLEAR_AVATAR](state) {
-    state.user.has_avatar = false
+  [SAVE_SEQUENCE_SEARCH_END](state, { searchQuery, production }) {
+    if (!state.userFilters.sequence) {
+      state.userFilters.sequence = {}
+    }
+    if (!state.userFilters.sequence[production.id]) {
+      state.userFilters.sequence[production.id] = []
+    }
+    if (!state.userFilters.sequence[production.id].includes(searchQuery)) {
+      state.userFilters.sequence[production.id].push(searchQuery)
+      state.userFilters.sequence[production.id] = sortByName(
+        state.userFilters.sequence[production.id]
+      )
+    }
+  },
+
+  [SAVE_BREAKDOWN_SEARCH_END](state, { searchQuery, production }) {
+    if (!state.userFilters.breakdown) {
+      state.userFilters.breakdown = {}
+    }
+    if (!state.userFilters.breakdown[production.id]) {
+      state.userFilters.breakdown[production.id] = []
+    }
+    if (!state.userFilters.breakdown[production.id].includes(searchQuery)) {
+      state.userFilters.breakdown[production.id].push(searchQuery)
+      state.userFilters.breakdown[production.id] = sortByName(
+        state.userFilters.breakdown[production.id]
+      )
+    }
+  },
+
+  [CLEAR_AVATAR](state, userId) {
+    if (state.user.id === userId) {
+      state.user.has_avatar = false
+    }
   },
 
   [RESET_ALL](state) {

@@ -9,11 +9,12 @@
 </template>
 
 <script>
-import Topbar from '@/components/tops/Topbar'
-import Sidebar from '@/components/sides/Sidebar'
+import Topbar from '@/components/tops/Topbar.vue'
+import Sidebar from '@/components/sides/Sidebar.vue'
 
 export default {
   name: 'main-wrapper',
+
   components: {
     Topbar,
     Sidebar
@@ -30,6 +31,5 @@ export default {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: $white-grey;
 }
 </style>

@@ -7,15 +7,15 @@
     </div>
 
     <div class="flexrow">
-      <people-avatar class="flexrow-item" :person="person" :no-cache="true" />
+      <people-avatar class="flexrow-item" :person="person" :is-lazy="false" />
       <page-title class="flexrow-item" :text="person.full_name" />
     </div>
+
     <div class="info-date" v-if="isMonthInfo">{{ monthString }} {{ year }}</div>
-
     <div class="info-date" v-else-if="isWeekInfo">
-      week {{ week }}, {{ startDay }} - {{ endDay }} {{ weekMonth }} {{ year }}
+      {{ $t('main.week') }}
+      {{ week }}, {{ startDay }} - {{ endDay }} {{ weekMonth }} {{ year }}
     </div>
-
     <div class="info-date" v-else-if="isDayInfo">
       {{ day }} {{ monthString }} {{ year }}
     </div>
@@ -31,17 +31,18 @@
 </template>
 
 <script>
+import { XIcon } from 'lucide-vue'
 import moment from 'moment-timezone'
+import { mapGetters } from 'vuex'
 
-import { mapGetters, mapActions } from 'vuex'
-import { XIcon } from 'vue-feather-icons'
-import PageTitle from '@/components/widgets/PageTitle'
-import PeopleAvatar from '@/components/widgets/PeopleAvatar'
-import QuotaShotList from '@/components/lists/QuotaShotList'
 import { monthToString } from '@/lib/time'
 
+import PageTitle from '@/components/widgets/PageTitle.vue'
+import PeopleAvatar from '@/components/widgets/PeopleAvatar.vue'
+import QuotaShotList from '@/components/lists/QuotaShotList.vue'
+
 export default {
-  name: 'shot-quota-info',
+  name: 'people-quota-info',
 
   components: {
     XIcon,
@@ -101,7 +102,7 @@ export default {
         .day('Monday')
         .year(this.year)
         .week(this.week)
-        .add('days', 6)
+        .add(6, 'days')
         .date()
     },
 
@@ -167,8 +168,6 @@ export default {
   },
 
   methods: {
-    ...mapActions([]),
-
     onCloseClicked() {
       this.$emit('close')
     }
@@ -186,6 +185,8 @@ export default {
 }
 
 .people-timesheet-info {
+  border-left: 1px solid var(--border);
+  height: 100%;
   padding: 1em;
 }
 

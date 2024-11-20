@@ -1,11 +1,14 @@
 import Papa from 'papaparse'
+
+import { getTaskTypePriorityOfProd } from '@/lib/productions'
+import { getPercentage } from '@/lib/stats'
+import stringHelpers from '@/lib/string'
 import {
   getDayRange,
   getMonthRange,
   getWeekRange,
   hoursToDays
 } from '@/lib/time'
-import { getPercentage } from '@/lib/stats'
 
 const csv = {
   generateTimesheet(
@@ -63,7 +66,13 @@ const csv = {
     } else if (detailLevel === 'day') {
       range = getDayRange(year, month, currentYear, currentMonth)
     }
-    for (const unit in range) headers.push(parseInt(unit) + 1)
+    for (const unit in range) {
+      let value = parseInt(unit) + 1
+      if (detailLevel === 'day') {
+        value = `${year}-${String(month).padStart(2, 0)}-${String(value).padStart(2, 0)}`
+      }
+      headers.push(value)
+    }
     return headers
   },
 
@@ -108,25 +117,19 @@ const csv = {
     return entries
   },
 
-  turnEntriesToCsvString(entries) {
-    const lineArray = []
-    entries.forEach(infoArray => {
-      const sanitizedCells = infoArray.map(cell => {
-        const cellString = `${cell || ''}`
-        if (cellString.search('"') !== -1) {
-          return `${cellString.replace(/;/g, '')}`
-        } else return `"${cellString}"`
-      })
-      const line = sanitizedCells.join(';')
-      if (line.length > 2) lineArray.push(line)
+  turnEntriesToCsvString(entries, config = {}) {
+    return Papa.unparse(entries, {
+      delimiter: ';',
+      newline: '\n',
+      quotes: true,
+      skipEmptyLines: true,
+      ...config
     })
-    return lineArray.join('\n')
   },
 
   buildCsvFile(name, entries) {
     const csvContent = csv.turnEntriesToCsvString(entries)
-    const result =
-      'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent)
+    const result = `data:text/csv;charset=utf-8,${encodeURIComponent(csvContent)}`
     const link = document.createElement('a')
     link.setAttribute('href', result)
     link.setAttribute('download', `${name}.csv`)
@@ -138,29 +141,31 @@ const csv = {
   generateStatReports(
     name,
     mainStats,
-    taskTyeMap,
+    taskTypeMap,
     taskStatusMap,
     entryMap,
-    countMode
+    countMode,
+    production
   ) {
     const headers = csv.getStatReportsHeaders(
       mainStats,
-      taskTyeMap,
-      taskStatusMap
+      taskTypeMap,
+      production
     )
     const entries = csv.getStatReportsEntries(
       mainStats,
-      taskTyeMap,
+      taskTypeMap,
       taskStatusMap,
       entryMap,
-      countMode
+      countMode,
+      production
     )
     const lines = [headers, ...entries]
     return csv.buildCsvFile(name, lines)
   },
 
-  getStatReportsHeaders(mainStats, taskTypeMap, taskStatusMap) {
-    const taskTypeIds = getStatsTaskTypeIds(mainStats, taskTypeMap)
+  getStatReportsHeaders(mainStats, taskTypeMap, production) {
+    const taskTypeIds = getStatsTaskTypeIds(mainStats, taskTypeMap, production)
     const initialHeaders = ['Name', '', 'All', '']
     return taskTypeIds.reduce((acc, taskTypeId) => {
       if (taskTypeId !== 'all') {
@@ -177,10 +182,11 @@ const csv = {
     taskTypeMap,
     taskStatusMap,
     entryMap,
-    countMode = 'count'
+    countMode = 'count',
+    production
   ) {
     let entries = []
-    const taskTypeIds = getStatsTaskTypeIds(mainStats, taskTypeMap)
+    const taskTypeIds = getStatsTaskTypeIds(mainStats, taskTypeMap, production)
     const entryIds = getStatsEntryIds(mainStats, entryMap)
 
     entryIds.forEach(entryId => {
@@ -231,7 +237,9 @@ const csv = {
 
       entries = entries.concat(
         Object.values(lineMap).sort((a, b) => {
-          return a[1].localeCompare(b[1])
+          return a[1].localeCompare(b[1], undefined, {
+            numeric: true
+          })
         })
       )
       entries.push([''])
@@ -242,22 +250,24 @@ const csv = {
   generateRetakeStatReports(
     name,
     mainStats,
-    taskTyeMap,
+    taskTypeMap,
     taskStatusMap,
     entryMap,
-    countMode
+    countMode,
+    production
   ) {
     const headers = csv.getStatReportsHeaders(
       mainStats,
-      taskTyeMap,
-      taskStatusMap
+      taskTypeMap,
+      production
     )
     const entries = csv.getRetakeStatReportsEntries(
       mainStats,
-      taskTyeMap,
+      taskTypeMap,
       taskStatusMap,
       entryMap,
-      countMode
+      countMode,
+      production
     )
     const lines = [headers, ...entries]
     return csv.buildCsvFile(name, lines)
@@ -268,10 +278,11 @@ const csv = {
     taskTypeMap,
     taskStatusMap,
     entryMap,
-    countMode = 'count'
+    countMode = 'count',
+    production
   ) {
     let entries = []
-    const taskTypeIds = getStatsTaskTypeIds(mainStats, taskTypeMap)
+    const taskTypeIds = getStatsTaskTypeIds(mainStats, taskTypeMap, production)
     const entryIds = getStatsEntryIds(mainStats, entryMap)
 
     entryIds.forEach(entryId => {
@@ -296,13 +307,7 @@ const csv = {
       )
 
       taskTypeIds.forEach(taskTypeId => {
-        if (taskTypeId === 'all') {
-          Object.keys(mainStats[entryId].all).forEach(taskStatusId => {
-            if (!['max_retake_count', 'evolution'].includes(taskStatusId)) {
-              lineMap[taskStatusId] = lineMap[taskStatusId].concat(['', ''])
-            }
-          })
-        } else {
+        if (taskTypeId !== 'all') {
           const taskTypeStats = mainStats[entryId][taskTypeId]
           if (taskTypeStats) {
             const total = getStatsTotalEntryCount(
@@ -321,6 +326,12 @@ const csv = {
               total,
               lineMap
             )
+          } else {
+            Object.keys(mainStats[entryId].all).forEach(taskStatusId => {
+              if (!['max_retake_count', 'evolution'].includes(taskStatusId)) {
+                lineMap[taskStatusId] = lineMap[taskStatusId].concat(['', ''])
+              }
+            })
           }
         }
       })
@@ -359,8 +370,7 @@ const csv = {
       detailLevel,
       headers,
       year,
-      month,
-      week
+      month
     )
     csv.buildCsvFile(name, entries)
   },
@@ -372,8 +382,7 @@ const csv = {
     detailLevel,
     headers,
     year,
-    month,
-    week
+    month
   ) {
     const entries = [headers]
     people.forEach(person => {
@@ -382,11 +391,9 @@ const csv = {
         if (index > 0) {
           let key = year
           if (detailLevel === 'day') {
-            key = `${year}-${(month + '').padStart(2, '0')}-${(
-              index + ''
-            ).padStart(2, '0')}`
+            key = `${year}-${String(month).padStart(2, '0')}-${String(index).padStart(2, '0')}`
           } else {
-            key = `${year}-${('' + index).padStart(2, '0')}`
+            key = `${year}-${String(index).padStart(2, '0')}`
           }
           if (
             quotas &&
@@ -404,49 +411,53 @@ const csv = {
     return entries
   },
 
-  processCSV: (data, config) => {
+  processCSV: (data, config = {}) => {
     return new Promise((resolve, reject) => {
       Papa.parse(data, {
-        config: config,
         encoding: 'UTF-8',
         error: reject,
+        transform: value => value.trim(),
         complete: results => {
-          const parsedData = csv.cleanUpCsv(results.data)
-          resolve(parsedData)
-        }
+          results.data[0].forEach(stringHelpers.capitalize)
+          resolve(results.data)
+        },
+        ...config
       })
     })
-  },
-
-  cleanUpCsv: data => {
-    data.forEach(item => {
-      item.forEach((item, index, data) => {
-        data[index] = item.trim()
-      })
-    })
-    data[0].forEach((item, index, data) => {
-      data[index] = (item[0] || '').toUpperCase() + item.slice(1)
-    })
-    return data
   }
 }
 
-const getStatsTaskTypeIds = (mainStats, taskTypeMap) => {
+const getStatsTaskTypeIds = (mainStats, taskTypeMap, production) => {
   return Object.keys(mainStats.all)
     .filter(taskTypeId => taskTypeId !== 'evolution')
     .sort((a, b) => {
       if (a === 'all') return 1
       if (b === 'all') return -1
-      return taskTypeMap.get(a).priority - taskTypeMap.get(b).priority
+      const taskTypeA = taskTypeMap.get(a)
+      const taskTypeB = taskTypeMap.get(b)
+      const taskTypeAPriority = getTaskTypePriorityOfProd(taskTypeA, production)
+      const taskTypeBPriority = getTaskTypePriorityOfProd(taskTypeB, production)
+      if (taskTypeAPriority === taskTypeBPriority) {
+        return taskTypeA.name.localeCompare(taskTypeB.name, undefined, {
+          numeric: true
+        })
+      }
+      return taskTypeAPriority - taskTypeBPriority
     })
 }
 
 const getStatsEntryIds = (mainStats, entryMap) => {
-  return Object.keys(mainStats).sort((a, b) => {
-    if (a === 'all') return -1
-    if (b === 'all') return 1
-    return entryMap.get(a).name.localeCompare(entryMap.get(b).name)
-  })
+  return Object.keys(mainStats)
+    .filter(entryId => entryId === 'all' || entryMap.get(entryId))
+    .sort((a, b) => {
+      if (a === 'all') return -1
+      if (b === 'all') return 1
+      return entryMap
+        .get(a)
+        .name.localeCompare(entryMap.get(b).name, undefined, {
+          numeric: true
+        })
+    })
 }
 
 const getStatsTotalCount = (mainStats, taskStatusIds, countMode, entryId) => {
@@ -501,7 +512,7 @@ const buildTotalLines = (
       name,
       taskStatusName,
       count || '0',
-      percentage + '%'
+      `${percentage}%`
     ]
   })
   return lineMap
@@ -523,7 +534,7 @@ const addEntryStatusStats = (
     const percentage = getPercentage(count, total)
     lineMap[taskStatusId] = lineMap[taskStatusId].concat([
       count || '0',
-      percentage + '%'
+      `${percentage}%`
     ])
   })
 }

@@ -3,20 +3,16 @@
  * list.
  */
 export const searchMixin = {
-  created() {},
-
-  mounted() {},
-
-  beforeDestroy() {},
-
-  computed: {},
-
   methods: {
     changeSearch(searchQuery) {
       this.searchField.setValue(searchQuery.search_query)
       this.searchField.$emit('change', searchQuery.search_query)
       if (this.resizeHeaders) this.resizeHeaders()
       if (this.applySearch) this.applySearch(searchQuery.search_query)
+    },
+
+    removeSearchQuery(searchQuery) {
+      this.removeShotSearch(searchQuery).catch(console.error)
     },
 
     focusSearchField(options) {
@@ -26,7 +22,7 @@ export const searchMixin = {
     },
 
     setSearchFromUrl() {
-      const searchQuery = this.searchField.getValue()
+      const searchQuery = this.searchField?.getValue()
       const searchFromUrl = this.$route.query.search
       if (!searchQuery && searchFromUrl) {
         this.searchField.setValue(searchFromUrl)
@@ -38,6 +34,7 @@ export const searchMixin = {
       if (this.$route.query.search !== searchQuery) {
         this.$router.push({
           query: {
+            ...this.$route.query,
             search: searchQuery
           }
         })

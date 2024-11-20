@@ -1,6 +1,6 @@
 <template>
   <div class="data-list">
-    <div class="datatable-wrapper" ref="body" v-scroll="onBodyScroll">
+    <div ref="body" class="datatable-wrapper" v-scroll="onBodyScroll">
       <table-header-menu
         ref="headerMenu"
         :is-minimized="hiddenColumns[lastHeaderMenuDisplayed]"
@@ -114,6 +114,7 @@
             >
               {{ $t('assets.fields.description') }}
             </th>
+
             <th
               scope="col"
               class="time-spent number-cell"
@@ -141,6 +142,18 @@
               "
             >
               {{ $t('main.estimation_short') }}
+            </th>
+
+            <th
+              scope="col"
+              class="resolution"
+              v-if="
+                isAssetResolution &&
+                isShowInfos &&
+                metadataDisplayHeaders.resolution
+              "
+            >
+              {{ $t('shots.fields.resolution') }}
             </th>
 
             <metadata-header
@@ -189,18 +202,18 @@
 
               <table-metadata-selector-menu
                 ref="headerMetadataSelectorMenu"
-                :metadataDisplayHeaders.sync="metadataDisplayHeaders"
+                namespace="assets"
                 :descriptors="assetMetadataDescriptors"
+                :metadata-display-headers.sync="metadataDisplayHeaders"
                 :exclude="{
                   timeSpent: !isAssetTime,
                   estimation: !isAssetEstimation
                 }"
-                namespace="assets"
                 v-show="columnSelectorDisplayed && isShowInfos"
               />
 
               <button-simple
-                class="is-small is-pulled-right"
+                class="is-small is-pulled-right mr05"
                 icon="down"
                 @click="toggleColumnSelector"
                 v-if="isShowInfos"
@@ -215,7 +228,7 @@
           v-for="(group, k) in displayedAssets"
           v-if="!isLoading && isListVisible"
         >
-          <tr class="datatable-type-header">
+          <tr class="datatable-type-header" v-if="group[0]">
             <th scope="rowgroup" :colspan="visibleColumns">
               <span
                 class="datatable-row-header pointer"
@@ -228,9 +241,13 @@
 
           <tr
             class="datatable-row"
+            :class="{
+              canceled: asset.canceled,
+              shared: asset.shared
+            }"
             scope="row"
-            :key="'row' + asset.id"
-            :class="{ canceled: asset.canceled }"
+            :key="`row${asset.id}`"
+            :title="asset.shared ? $t('library.from_library') : undefined"
             v-for="(asset, i) in group"
           >
             <th
@@ -245,6 +262,7 @@
                   type="checkbox"
                   class="flexrow-item"
                   :checked="selectedAssets.has(asset.id)"
+                  :disabled="asset.shared"
                   @input="event => toggleLine(asset, event)"
                   v-show="isCurrentUserManager"
                 />
@@ -261,9 +279,13 @@
                   class="asset-link asset-name flexrow-item"
                   :to="assetPath(asset.id)"
                   :title="asset.full_name"
+                  v-if="!asset.shared"
                 >
                   {{ asset.name }}
                 </router-link>
+                <template v-else>
+                  {{ asset.name }}
+                </template>
               </div>
             </th>
 
@@ -278,7 +300,7 @@
               class="metadata-descriptor datatable-row-header"
               :title="asset.data ? asset.data[descriptor.field_name] : ''"
               :style="{
-                'z-index': 1000 - i, // Needed for combo to be above the next cell
+                'z-index': 1000 - i - k * 100, // Needed for combo to be above the next cell
                 left: offsets['editor-' + j]
                   ? `${offsets['editor-' + j]}px`
                   : '0'
@@ -307,8 +329,8 @@
               :entity="asset"
               :task-test="taskMap.get(asset.validations.get(columnId))"
               :selected="isSelected(i, k, j)"
-              :rowX="getIndex(i, k)"
-              :columnY="j"
+              :row-x="getIndex(i, k)"
+              :column-y="j"
               :minimized="hiddenColumns[columnId]"
               :is-static="true"
               :is-assignees="isShowAssignations"
@@ -345,7 +367,7 @@
             <description-cell
               class="description"
               @description-changed="value => onDescriptionChanged(asset, value)"
-              :editable="isCurrentUserManager"
+              :editable="isCurrentUserManager && !asset.shared"
               v-if="!isCurrentUserClient && isShowInfos && isAssetDescription"
               :entry="asset"
             />
@@ -372,6 +394,42 @@
               "
             >
               {{ formatDuration(asset.estimation) }}
+            </td>
+
+            <td
+              class="resolution"
+              v-if="
+                isAssetResolution &&
+                isShowInfos &&
+                metadataDisplayHeaders.resolution
+              "
+            >
+              <input
+                :class="{
+                  'input-editor': true,
+                  error: !isValidResolution(asset)
+                }"
+                :value="
+                  getMetadataFieldValue({ field_name: 'resolution' }, asset)
+                "
+                @input="
+                  event =>
+                    onMetadataFieldChanged(
+                      asset,
+                      { field_name: 'resolution' },
+                      event
+                    )
+                "
+                @keyup.ctrl="
+                  event =>
+                    onInputKeyUp(event, getIndex(i, k), descriptorLength + 3)
+                "
+                v-if="isCurrentUserManager"
+              />
+
+              <span class="metadata-value selectable" v-else>
+                {{ getMetadataFieldValue({ field_name: 'resolution' }, asset) }}
+              </span>
             </td>
 
             <!-- other Metadata cells -->
@@ -406,8 +464,8 @@
               :selected="
                 isSelected(i, k, j + stickedDisplayedValidationColumns.length)
               "
-              :rowX="getIndex(i, k)"
-              :columnY="j"
+              :row-x="getIndex(i, k)"
+              :column-y="j"
               :minimized="hiddenColumns[columnId]"
               :is-static="true"
               :is-assignees="isShowAssignations"
@@ -424,38 +482,38 @@
               @edit-clicked="$emit('edit-clicked', asset)"
               @delete-clicked="$emit('delete-clicked', asset)"
               @restore-clicked="$emit('restore-clicked', asset)"
-              v-if="isCurrentUserManager"
+              v-if="isCurrentUserManager && !asset.shared"
             />
             <td class="actions" v-else></td>
           </tr>
         </tbody>
       </table>
-    </div>
 
-    <table-info :is-loading="isLoading" :is-error="isError" />
+      <div
+        class="has-text-centered"
+        v-if="isEmptyList && !isCurrentUserClient && !isLoading"
+      >
+        <p class="info">
+          <img src="../../assets/illustrations/empty_asset.png" />
+        </p>
+        <p class="info">{{ $t('assets.empty_list') }}</p>
+        <button-simple
+          class="level-item big-button"
+          :text="$t('assets.new_assets')"
+          @click="$emit('new-clicked')"
+        />
+      </div>
+      <div
+        class="has-text-centered"
+        v-if="isEmptyList && isCurrentUserClient && !isLoading"
+      >
+        <p class="info">
+          <img src="../../assets/illustrations/empty_asset.png" />
+        </p>
+        <p class="info">{{ $t('assets.empty_list_client') }}</p>
+      </div>
 
-    <div
-      class="has-text-centered"
-      v-if="isEmptyList && !isCurrentUserClient && !isLoading"
-    >
-      <p class="info">
-        <img src="../../assets/illustrations/empty_asset.png" />
-      </p>
-      <p class="info">{{ $t('assets.empty_list') }}</p>
-      <button-simple
-        class="level-item big-button"
-        :text="$t('assets.new_assets')"
-        @click="$emit('new-clicked')"
-      />
-    </div>
-    <div
-      class="has-text-centered"
-      v-if="isEmptyList && isCurrentUserClient && !isLoading"
-    >
-      <p class="info">
-        <img src="../../assets/illustrations/empty_asset.png" />
-      </p>
-      <p class="info">{{ $t('assets.empty_list_client') }}</p>
+      <table-info :is-loading="isLoading" :is-error="isError" />
     </div>
 
     <p class="has-text-centered nb-assets" v-if="!isEmptyList && !isLoading">
@@ -465,9 +523,17 @@
         v-show="displayedAssetsTimeSpent > 0 || displayedAssetsEstimation > 0"
       >
         ({{ formatDuration(displayedAssetsTimeSpent) }}
-        {{ $tc('main.days_spent', displayedAssetsTimeSpent) }},
+        {{
+          isDurationInHours()
+            ? $tc('main.hours_spent', displayedAssetsTimeSpent)
+            : $tc('main.days_spent', displayedAssetsTimeSpent)
+        }},
         {{ formatDuration(displayedAssetsEstimation) }}
-        {{ $tc('main.man_days', displayedAssetsEstimation) }})
+        {{
+          isDurationInHours()
+            ? $tc('main.hours_estimated', displayedAssetsEstimation)
+            : $tc('main.man_days', displayedAssetsEstimation)
+        }})
       </span>
     </p>
   </div>
@@ -483,22 +549,23 @@ import { range } from '@/lib/time'
 import { sortTaskTypes } from '@/lib/sorting'
 import { selectionListMixin } from '@/components/mixins/selection'
 
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import ComboboxTaskType from '@/components/widgets/ComboboxTaskType'
-import DescriptionCell from '@/components/cells/DescriptionCell'
-import EntityThumbnail from '@/components/widgets/EntityThumbnail'
-import MetadataHeader from '@/components/cells/MetadataHeader'
-import MetadataInput from '@/components/cells/MetadataInput'
-import RowActionsCell from '@/components/cells/RowActionsCell'
-import TableHeaderMenu from '@/components/widgets/TableHeaderMenu'
-import TableInfo from '@/components/widgets/TableInfo'
-import TableMetadataHeaderMenu from '@/components/widgets/TableMetadataHeaderMenu'
-import TableMetadataSelectorMenu from '@/components/widgets/TableMetadataSelectorMenu'
-import ValidationCell from '@/components/cells/ValidationCell'
-import ValidationHeader from '@/components/cells/ValidationHeader'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import ComboboxTaskType from '@/components/widgets/ComboboxTaskType.vue'
+import DescriptionCell from '@/components/cells/DescriptionCell.vue'
+import EntityThumbnail from '@/components/widgets/EntityThumbnail.vue'
+import MetadataHeader from '@/components/cells/MetadataHeader.vue'
+import MetadataInput from '@/components/cells/MetadataInput.vue'
+import RowActionsCell from '@/components/cells/RowActionsCell.vue'
+import TableHeaderMenu from '@/components/widgets/TableHeaderMenu.vue'
+import TableInfo from '@/components/widgets/TableInfo.vue'
+import TableMetadataHeaderMenu from '@/components/widgets/TableMetadataHeaderMenu.vue'
+import TableMetadataSelectorMenu from '@/components/widgets/TableMetadataSelectorMenu.vue'
+import ValidationCell from '@/components/cells/ValidationCell.vue'
+import ValidationHeader from '@/components/cells/ValidationHeader.vue'
 
 export default {
   name: 'asset-list',
+
   mixins: [
     entityListMixin,
     descriptorMixin,
@@ -557,6 +624,7 @@ export default {
       metadataDisplayHeaders: {
         estimation: true,
         readyFor: true,
+        resolution: true,
         timeSpent: true
       },
       stickedColumns: {},
@@ -582,7 +650,9 @@ export default {
       'displayedAssetsTimeSpent',
       'displayedAssetsEstimation',
       'nbSelectedTasks',
+      'organisation',
       'isAssetDescription',
+      'isAssetResolution',
       'isBigThumbnails',
       'isCurrentUserClient',
       'isCurrentUserManager',
@@ -683,6 +753,10 @@ export default {
 
     isAssetsOnly() {
       return this.currentProduction.production_type === 'assets'
+    },
+
+    formatDurationInHours() {
+      return this.organisation.format_duration_in_hours
     }
   },
 
@@ -712,12 +786,15 @@ export default {
 
     // Selectable if the task type is included in the workflow.
     isSelectable(asset, columnId) {
+      if (asset.shared) {
+        return false
+      }
       const key = asset.asset_type_id + columnId
       if (this.isSelectableMap === undefined) this.isSelectableMap = {}
       if (this.isSelectableMap[key] === undefined) {
         const taskType = this.taskTypeMap.get(columnId)
         const assetType = this.assetTypeMap.get(asset.asset_type_id)
-        let taskTypes = assetType.task_types || []
+        let taskTypes = assetType?.task_types || []
         if (taskTypes.length === 0) {
           taskTypes = this.productionAssetTaskTypes.map(t => t.id)
         }
@@ -787,10 +864,6 @@ export default {
 
     getIndex(i, k) {
       return this.getEntityLineNumber(this.displayedAssets, i, k)
-    },
-
-    newAssetPath() {
-      return this.getPath('new-asset')
     },
 
     assetPath(assetId) {
@@ -892,6 +965,10 @@ export default {
       this.updateOffsets()
     },
 
+    isBigThumbnails() {
+      this.updateOffsets()
+    },
+
     currentProduction() {
       // Map used for performance reasons, to avoid array traversals
       this.isSelectableMap = {}
@@ -943,6 +1020,12 @@ td.estimation {
   width: 60px;
 }
 
+td.resolution {
+  min-width: 110px;
+  max-width: 110px;
+  width: 110px;
+}
+
 th.ready-for,
 td.ready-for {
   max-width: 180px;
@@ -981,6 +1064,30 @@ td.ready-for {
 
 .datatable-wrapper {
   min-height: 200px;
+  flex: 1;
+}
+
+.datatable-row.shared {
+  > th,
+  > td {
+    opacity: 0.6;
+    background: color-mix(
+      in srgb,
+      var(--shared-color) 20%,
+      transparent
+    ) !important;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+  > td:not(.description-cell) {
+    font-size: 0;
+
+    > :deep(*) {
+      display: none;
+    }
+  }
 }
 
 .datatable-row th.name {
@@ -1008,6 +1115,7 @@ input[type='number'] {
 
 // Metadata cell CSS
 
+td.resolution,
 td.metadata-descriptor {
   height: 3.1rem;
   max-width: 120px;

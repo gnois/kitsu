@@ -36,7 +36,7 @@
 
     <button-simple
       class="flexrow-item"
-      icon="delete"
+      icon="trash"
       :title="$t('playlists.actions.files_delete')"
       @click="$emit('remove-preview-clicked')"
       v-if="!readOnly && !fullScreen && !light"
@@ -47,8 +47,7 @@
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
-import ButtonSimple from '@/components/widgets/ButtonSimple'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
 
 export default {
   name: 'browsing-bar',
@@ -85,8 +84,6 @@ export default {
   },
 
   computed: {
-    ...mapGetters([]),
-
     isBigDisplay() {
       return (!this.light || this.fullScreen) && this.previews.length > 1
     },
@@ -98,13 +95,7 @@ export default {
         return this.previews[this.currentIndex - 1].extension === 'mp4'
       }
     }
-  },
-
-  methods: {
-    ...mapActions([])
-  },
-
-  watch: {}
+  }
 }
 </script>
 
@@ -119,7 +110,7 @@ export default {
   color: #bbb;
   border: 0;
   margin: 0;
-  transition: all 0.3 ease;
+  transition: all 0.3s ease;
 
   &:first-child {
     border-bottom-left-radius: 5px;
@@ -133,7 +124,7 @@ export default {
 
 .buttons .button.active,
 .buttons .button:hover {
-  color: #43b581;
+  color: var(--background-selectable);
 }
 
 .bar-element {
@@ -143,5 +134,6 @@ export default {
 
 .current-index {
   cursor: pointer;
+  white-space: nowrap;
 }
 </style>

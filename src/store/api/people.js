@@ -1,39 +1,24 @@
 import client from '@/store/api/client'
+import { buildQueryString } from '@/lib/query'
 
 export default {
-  getOrganisation() {
-    return client.pget('/api/data/organisations').then(organisations => {
-      let organisation = {
-        name: 'Kitsu',
-        hours_by_day: 8,
-        has_avatar: false,
-        use_original_file_name: false,
-        timesheets_locked: false,
-        chat_token_slack: '',
-        chat_webhook_mattermost: '',
-        chat_token_discord: ''
-      }
-      if (organisations.length > 0) organisation = organisations[0]
-      organisation.use_original_file_name = organisation.use_original_file_name
-        ? 'true'
-        : 'false'
-      organisation.timesheets_locked = organisation.timesheets_locked
-        ? 'true'
-        : 'false'
-      Promise.resolve(organisation)
-    })
+  getOrganisations() {
+    return client.pget('/api/data/organisations')
   },
 
   updateOrganisation(organisation) {
     const data = {
       name: organisation.name,
       hours_by_day: organisation.hours_by_day,
-      timesheets_locked: organisation.timesheets_locked === 'true',
-      use_original_file_name: organisation.use_original_file_name === 'true',
-      hd_by_default: organisation.hd_by_default === 'true',
+      timesheets_locked: organisation.timesheets_locked,
+      use_original_file_name: organisation.use_original_file_name,
+      hd_by_default: organisation.hd_by_default,
       chat_token_slack: organisation.chat_token_slack,
       chat_webhook_mattermost: organisation.chat_webhook_mattermost,
-      chat_token_discord: organisation.chat_token_discord
+      chat_token_discord: organisation.chat_token_discord,
+      has_avatar: organisation.has_avatar,
+      format_duration_in_hours: organisation.format_duration_in_hours,
+      dark_theme_by_default: organisation.dark_theme_by_default
     }
     return client.pput(`/api/data/organisations/${organisation.id}`, data)
   },
@@ -45,40 +30,58 @@ export default {
     )
   },
 
+  deleteOrganisationLogo(organisationId) {
+    return client.pput(`/api/data/organisations/${organisationId}`, {
+      has_avatar: false
+    })
+  },
+
   getPeople(callback) {
     client.get('/api/data/persons?relations=true', callback)
   },
 
-  getPerson(personId, callback) {
-    client.get(`/api/data/persons/${personId}`, callback)
+  getPerson(personId) {
+    return client.pget(`/api/data/persons/${personId}`)
   },
 
   createPerson(person) {
     const data = {
       first_name: person.first_name,
       last_name: person.last_name,
-      email: person.email.trim(),
+      email: person.email,
       phone: person.phone,
       role: person.role,
+      contract_type: person.contract_type,
       active: person.active,
-      departments: person.departments
+      departments: person.departments,
+      studio_id: person.studio_id,
+      is_bot: person.is_bot,
+      expiration_date: person.expiration_date?.toJSON().slice(0, 10)
     }
-    return client.ppost('/api/data/persons/new', data)
+    return client.ppost('/api/data/persons', data)
   },
 
   invitePerson(person) {
     return client.pget(`/api/actions/persons/${person.id}/invite`)
   },
 
+  generateToken(person) {
+    const data = {
+      expiration_date: person.expiration_date?.toJSON().slice(0, 10) || null
+    }
+    return client.pput(`/api/data/persons/${person.id}`, data)
+  },
+
   updatePerson(person) {
     const data = {
       first_name: person.first_name,
       last_name: person.last_name,
-      email: person.email.trim(),
+      email: person.email,
       phone: person.phone,
       timezone: person.timezone,
       locale: person.locale,
       role: person.role,
+      contract_type: person.contract_type,
       active: person.active,
       notifications_enabled: person.notifications_enabled === 'true',
       notifications_slack_enabled:
@@ -90,12 +93,13 @@ export default {
       notifications_discord_enabled:
         person.notifications_discord_enabled === 'true',
       notifications_discord_userid: person.notifications_discord_userid,
-      departments: person.departments
+      departments: person.departments,
+      studio_id: person.studio_id
     }
     return client.pput(`/api/data/persons/${person.id}`, data)
   },
 
-  deletePerson(person, callback) {
+  deletePerson(person) {
     return client.pdel(`/api/data/persons/${person.id}?force=true`)
   },
 
@@ -105,14 +109,14 @@ export default {
       password_2: form.password2
     }
     return client.ppost(
-      `api/actions/persons/${person.id}/change-password`,
+      `/api/actions/persons/${person.id}/change-password`,
       data
     )
   },
 
   disableTwoFactorAuthenticationPerson(person) {
     return client.pdel(
-      `api/actions/persons/${person.id}/disable-two-factor-authentication`
+      `/api/actions/persons/${person.id}/disable-two-factor-authentication`
     )
   },
 
@@ -122,12 +126,8 @@ export default {
     return client.ppost(path, formData)
   },
 
-  postAvatar(userId, formData, callback) {
-    client.post(
-      `/api/pictures/thumbnails/persons/${userId}`,
-      formData,
-      callback
-    )
+  postAvatar(userId, formData) {
+    return client.ppost(`/api/pictures/thumbnails/persons/${userId}`, formData)
   },
 
   changePassword(form, callback) {
@@ -201,12 +201,12 @@ export default {
       .then(body => Promise.resolve(body.otp_recovery_codes))
   },
 
-  loadTodos(callback) {
-    client.get('/api/data/user/tasks', callback)
+  loadTodos() {
+    return client.pget('/api/data/user/tasks')
   },
 
-  loadDone(callback) {
-    client.get('/api/data/user/done-tasks', callback)
+  loadDone() {
+    return client.pget('/api/data/user/done-tasks')
   },
 
   loadTasksToCheck() {
@@ -217,18 +217,50 @@ export default {
     return client.pget(`/api/data/user/time-spents/${date}`)
   },
 
-  getPersonTasks(personId, callback) {
-    if (!callback) {
-      return client.pget(`/api/data/persons/${personId}/tasks`)
-    }
-    client.get(`/api/data/persons/${personId}/tasks`, callback)
+  getPersonTasks(personId) {
+    return client.pget(`/api/data/persons/${personId}/tasks`)
   },
 
-  getPersonDoneTasks(personId, callback) {
-    if (!callback) {
-      return client.pget(`/api/data/persons/${personId}/done-tasks`)
+  getPersonDoneTasks(personId) {
+    return client.pget(`/api/data/persons/${personId}/done-tasks`)
+  },
+
+  getUserSearchFilterGroups() {
+    return client.pget('/api/data/user/filter-groups')
+  },
+
+  createFilterGroup(
+    listType,
+    name,
+    color,
+    productionId,
+    entityType,
+    departmentId
+  ) {
+    const data = {
+      list_type: listType,
+      name,
+      color,
+      project_id: productionId,
+      entity_type: entityType,
+      department_id: departmentId
     }
-    client.get(`/api/data/persons/${personId}/done-tasks`, callback)
+    return client.ppost('/api/data/user/filter-groups', data)
+  },
+
+  updateFilterGroup(filterGroup) {
+    const data = {
+      name: filterGroup.name,
+      color: filterGroup.color,
+      is_shared: filterGroup.is_shared,
+      project_id: filterGroup.project_id,
+      department_id: filterGroup.department_id
+    }
+    return client.pput(`/api/data/user/filter-groups/${filterGroup.id}`, data)
+  },
+
+  removeFilterGroup(filterGroup) {
+    return client.pdel(`/api/data/user/filter-groups/${filterGroup.id}`)
   },
 
   getUserSearchFilters(callback) {
@@ -238,7 +270,11 @@ export default {
   updateFilter(searchFilter) {
     const data = {
       name: searchFilter.name,
-      search_query: searchFilter.search_query
+      search_query: searchFilter.search_query,
+      search_filter_group_id: searchFilter.search_filter_group_id,
+      is_shared: searchFilter.is_shared,
+      project_id: searchFilter.project_id,
+      department_id: searchFilter.department_id
     }
     return client.pput(`/api/data/user/filters/${searchFilter.id}`, data)
   },
@@ -254,7 +290,7 @@ export default {
     return client.ppost('/api/data/user/filters', data)
   },
 
-  removeFilter(searchFilter, callback) {
+  removeFilter(searchFilter) {
     return client.pdel(`/api/data/user/filters/${searchFilter.id}`)
   },
 
@@ -265,13 +301,23 @@ export default {
 
   setTimeSpent(taskId, personId, date, hours) {
     // Date is a string with following format: YYYYY-MM-DD.
-    const data = {
-      duration: hours * 60
+    const url = `/api/actions/tasks/${taskId}/time-spents/${date}/persons/${personId}`
+    if (hours > 0) {
+      return client.ppost(url, { duration: hours * 60 })
+    } else {
+      return client.pdel(url)
     }
-    return client.ppost(
-      `/api/actions/tasks/${taskId}/time-spents/${date}/persons/${personId}`,
-      data
-    )
+  },
+
+  getDaysOff(year, month) {
+    let path = '/api/data/day-offs'
+    if (year) {
+      path = `/api/data/persons/day-offs/${year}`
+      if (month) {
+        path += `/${month}`
+      }
+    }
+    return client.pget(path)
   },
 
   getDayOff(personId, date) {
@@ -279,17 +325,29 @@ export default {
     return client.pget(`/api/data/persons/${personId}/day-offs/${date}`)
   },
 
-  setDayOff(personId, date) {
+  createDayOff(personId, startDate, endDate, description) {
     // Date is a string with following format: YYYYY-MM-DD.
-    return client.ppost('/api/data/day-offs', { person_id: personId, date })
+    const data = {
+      person_id: personId,
+      date: startDate,
+      end_date: endDate || startDate,
+      description
+    }
+    return client.ppost('/api/data/day-offs', data)
   },
 
-  getDayOffs(year, month) {
-    const path = `/api/data/persons/day-offs/${year}/${month}`
-    return client.pget(path)
+  updateDayOff(id, personId, startDate, endDate, description) {
+    // Date is a string with following format: YYYYY-MM-DD.
+    const data = {
+      person_id: personId,
+      date: startDate,
+      end_date: endDate || startDate,
+      description
+    }
+    return client.pput(`/api/data/day-offs/${id}`, data)
   },
 
-  unsetDayOff(dayOff) {
+  deleteDayOff(dayOff) {
     return client.pdel(`/api/data/day-offs/${dayOff.id}`)
   },
 
@@ -306,28 +364,40 @@ export default {
     return client.pget(path)
   },
 
-  getDayTable(year, month, productionId) {
-    let path = `/api/data/persons/time-spents/day-table/${year}/${month}`
-    if (productionId) path += `?project_id=${productionId}`
-    return client.pget(path)
+  getDayTable(year, month, productionId, studioId) {
+    const path = `/api/data/persons/time-spents/day-table/${year}/${month}`
+    const params = {
+      project_id: productionId,
+      studio_id: studioId
+    }
+    return client.pget(buildQueryString(path, params))
   },
 
-  getWeekTable(year, month, productionId) {
-    let path = `/api/data/persons/time-spents/week-table/${year}`
-    if (productionId) path += `?project_id=${productionId}`
-    return client.pget(path)
+  getWeekTable(year, month, productionId, studioId) {
+    const path = `/api/data/persons/time-spents/week-table/${year}`
+    const params = {
+      project_id: productionId,
+      studio_id: studioId
+    }
+    return client.pget(buildQueryString(path, params))
   },
 
-  getMonthTable(year, month, productionId) {
-    let path = `/api/data/persons/time-spents/month-table/${year}`
-    if (productionId) path += `?project_id=${productionId}`
-    return client.pget(path)
+  getMonthTable(year, month, productionId, studioId) {
+    const path = `/api/data/persons/time-spents/month-table/${year}`
+    const params = {
+      project_id: productionId,
+      studio_id: studioId
+    }
+    return client.pget(buildQueryString(path, params))
   },
 
-  getYearTable(year, month, productionId) {
-    let path = '/api/data/persons/time-spents/year-table'
-    if (productionId) path += `?project_id=${productionId}`
-    return client.pget(path)
+  getYearTable(year, month, productionId, studioId) {
+    const path = '/api/data/persons/time-spents/year-table'
+    const params = {
+      project_id: productionId,
+      studio_id: studioId
+    }
+    return client.pget(buildQueryString(path, params))
   },
 
   getAggregatedPersonTimeSpents(
@@ -337,7 +407,8 @@ export default {
     month,
     week,
     day,
-    productionId
+    productionId,
+    studioId
   ) {
     let path = `/api/data/persons/${personId}/time-spents/`
 
@@ -351,11 +422,11 @@ export default {
       path += `day/${year}/${month}/${day}`
     }
 
-    if (productionId) {
-      path += `?project_id=${productionId}`
+    const params = {
+      project_id: productionId,
+      studio_id: studioId
     }
-
-    return client.pget(path)
+    return client.pget(buildQueryString(path, params))
   },
 
   getPersonQuotaShots(
@@ -370,7 +441,6 @@ export default {
     computeMode
   ) {
     let path = `/api/data/persons/${personId}/quota-shots/`
-    const weighted = computeMode === 'weighted'
 
     if (detailLevel === 'year') {
       path += `year/${year}`
@@ -391,7 +461,7 @@ export default {
       else path += '&'
       path += `&task_type_id=${taskTypeId}`
     }
-    path += `&weighted=${weighted}`
+    path += `&count_mode=${computeMode}`
 
     return client.pget(path)
   },
@@ -402,5 +472,9 @@ export default {
 
   clearAvatar() {
     return client.pdel('/api/actions/user/clear-avatar')
+  },
+
+  clearPersonAvatar(person) {
+    return client.pdel(`/api/actions/persons/${person.id}/clear-avatar`)
   }
 }

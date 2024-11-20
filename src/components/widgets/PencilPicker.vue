@@ -28,7 +28,7 @@
 
 <script>
 export default {
-  name: 'pencilpicker',
+  name: 'pencil-picker',
 
   props: {
     pencil: {
@@ -44,8 +44,6 @@ export default {
       isOpen: false
     }
   },
-
-  computed: {},
 
   methods: {
     togglePalette() {

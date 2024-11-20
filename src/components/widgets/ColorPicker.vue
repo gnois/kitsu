@@ -29,7 +29,7 @@
 
 <script>
 export default {
-  name: 'colorpicker',
+  name: 'color-picker',
 
   props: {
     color: {
@@ -54,8 +54,6 @@ export default {
       isOpen: false
     }
   },
-
-  computed: {},
 
   methods: {
     togglePalette() {

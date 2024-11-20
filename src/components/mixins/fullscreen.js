@@ -2,12 +2,6 @@
  * Utilities to deal with full screen state.
  */
 export const fullScreenMixin = {
-  created() {},
-
-  mounted() {},
-
-  beforeDestroy() {},
-
   computed: {
     isFullScreenEnabled() {
       return !!(
@@ -34,7 +28,7 @@ export const fullScreenMixin = {
 
     documentExitFullScreen() {
       if (document.exitFullscreen) {
-        document.exitFullscreen()
+        return document.exitFullscreen()
       } else if (document.mozCancelFullScreen) {
         document.mozCancelFullScreen()
       } else if (document.webkitCancelFullScreen) {

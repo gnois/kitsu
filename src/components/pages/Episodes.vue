@@ -15,11 +15,19 @@
             <button-simple
               class="flexrow-item"
               :title="$t('entities.build_filter.title')"
-              icon="funnel"
+              icon="filter"
               @click="() => (modals.isBuildFilterDisplayed = true)"
             />
             <div class="filler"></div>
             <div class="flexrow flexrow-item" v-if="!isCurrentUserClient">
+              <combobox-department
+                class="combobox-department flexrow-item"
+                :selectable-departments="selectableDepartments('Episode')"
+                :display-all-and-my-departments="true"
+                rounded
+                v-model="selectedDepartment"
+                v-if="departments.length > 0"
+              />
               <show-assignations-button class="flexrow-item" />
               <show-infos-button class="flexrow-item" />
               <big-thumbnails-button class="flexrow-item" />
@@ -37,6 +45,7 @@
           <div class="query-list mt1">
             <search-query-list
               :queries="episodeSearchQueries"
+              type="episode"
               @change-search="changeSearch"
               @remove-search="removeSearchQuery"
               v-if="!isEpisodesLoading && !initialLoading"
@@ -45,12 +54,10 @@
         </div>
 
         <sorting-info
-          :label="$t('main.sorted_by')"
           :sorting="episodeSorting"
           @clear-sorting="onChangeSortClicked(null)"
-          v-if="episodeSorting && episodeSorting.length > 0"
+          v-if="episodeSorting?.length"
         />
-
         <episode-list
           ref="episode-list"
           :displayed-episodes="displayedEpisodes"
@@ -147,12 +154,14 @@
 
     <add-thumbnails-modal
       ref="add-thumbnails-modal"
+      entity-type="Episode"
       parent="episodes"
       :active="modals.isAddThumbnailsDisplayed"
       :is-loading="loading.addThumbnails"
       :is-error="errors.addThumbnails"
       @cancel="hideAddThumbnailsModal"
       @confirm="confirmAddThumbnails"
+      v-if="false"
     />
 
     <build-filter-modal
@@ -188,6 +197,7 @@
 <script>
 import moment from 'moment'
 import { mapGetters, mapActions } from 'vuex'
+
 import csv from '@/lib/csv'
 import { sortByName } from '@/lib/sorting'
 import stringHelpers from '@/lib/string'
@@ -195,25 +205,27 @@ import stringHelpers from '@/lib/string'
 import { searchMixin } from '@/components/mixins/search'
 import { entitiesMixin } from '@/components/mixins/entities'
 
-import AddMetadataModal from '@/components/modals/AddMetadataModal'
-import AddThumbnailsModal from '@/components/modals/AddThumbnailsModal'
-import BigThumbnailsButton from '@/components/widgets/BigThumbnailsButton'
-import BuildFilterModal from '@/components/modals/BuildFilterModal'
-import ButtonSimple from '@/components/widgets/ButtonSimple'
-import CreateTasksModal from '@/components/modals/CreateTasksModal'
-import DeleteModal from '@/components/modals/DeleteModal'
-import EditEpisodeModal from '@/components/modals/EditEpisodeModal'
+import AddMetadataModal from '@/components/modals/AddMetadataModal.vue'
+import AddThumbnailsModal from '@/components/modals/AddThumbnailsModal.vue'
+import BigThumbnailsButton from '@/components/widgets/BigThumbnailsButton.vue'
+import BuildFilterModal from '@/components/modals/BuildFilterModal.vue'
+import ButtonSimple from '@/components/widgets/ButtonSimple.vue'
+import ComboboxDepartment from '@/components/widgets/ComboboxDepartment.vue'
+import CreateTasksModal from '@/components/modals/CreateTasksModal.vue'
+import DeleteModal from '@/components/modals/DeleteModal.vue'
+import EditEpisodeModal from '@/components/modals/EditEpisodeModal.vue'
 import EpisodeList from '@/components/lists/EpisodeList.vue'
-import HardDeleteModal from '@/components/modals/HardDeleteModal'
-import SearchField from '@/components/widgets/SearchField'
-import SearchQueryList from '@/components/widgets/SearchQueryList'
-import SortingInfo from '@/components/widgets/SortingInfo'
-import ShowAssignationsButton from '@/components/widgets/ShowAssignationsButton'
-import ShowInfosButton from '@/components/widgets/ShowInfosButton'
+import HardDeleteModal from '@/components/modals/HardDeleteModal.vue'
+import SearchField from '@/components/widgets/SearchField.vue'
+import SearchQueryList from '@/components/widgets/SearchQueryList.vue'
+import SortingInfo from '@/components/widgets/SortingInfo.vue'
+import ShowAssignationsButton from '@/components/widgets/ShowAssignationsButton.vue'
+import ShowInfosButton from '@/components/widgets/ShowInfosButton.vue'
 import TaskInfo from '@/components/sides/TaskInfo.vue'
 
 export default {
   name: 'episodes',
+
   mixins: [searchMixin, entitiesMixin],
 
   components: {
@@ -222,6 +234,7 @@ export default {
     BigThumbnailsButton,
     BuildFilterModal,
     ButtonSimple,
+    ComboboxDepartment,
     CreateTasksModal,
     DeleteModal,
     EditEpisodeModal,
@@ -280,6 +293,7 @@ export default {
         edit: false,
         episode: false,
         importing: false,
+        savingSearch: false,
         stay: false
       },
       errors: {
@@ -308,7 +322,7 @@ export default {
       this.searchField.setValue(this.episodeSearchText)
     }
     if (this.$route.query.search && this.$route.query.search.length > 0) {
-      searchQuery = '' + this.$route.query.search
+      searchQuery = `${this.$route.query.search}`
     }
     if (searchQuery === 'undefined') searchQuery = ''
     this.$refs['episode-list'].setScrollPosition(this.episodeListScrollPosition)
@@ -329,6 +343,9 @@ export default {
         this.$refs['episode-list'].setScrollPosition(
           this.episodeListScrollPosition
         )
+        this.$nextTick(() => {
+          this.$refs['episode-list']?.selectTaskFromQuery()
+        })
       }
     }
 
@@ -339,7 +356,9 @@ export default {
     ) {
       this.loadEpisodesWithTasks()
         .then(() => {
-          this.initialLoading = false
+          setTimeout(() => {
+            finalize()
+          }, 200)
         })
         .catch(console.error)
     } else {
@@ -353,8 +372,8 @@ export default {
       'currentEpisode',
       'currentProduction',
       'departmentMap',
-      'displayedEpisodes',
       'departments',
+      'displayedEpisodes',
       'episodeMap',
       'episodes',
       'episodeMap',
@@ -386,7 +405,7 @@ export default {
 
       this.productionEpisodeTaskTypes.forEach(item => {
         collection.push(item.name)
-        collection.push(item.name + ' comment')
+        collection.push(`${item.name} comment`)
       })
       return collection
     },
@@ -497,7 +516,15 @@ export default {
     },
 
     saveSearchQuery(searchQuery) {
-      this.saveEpisodeSearch(searchQuery).catch(console.error)
+      if (this.loading.savingSearch) {
+        return
+      }
+      this.loading.savingSearch = true
+      this.saveEpisodeSearch(searchQuery)
+        .catch(console.error)
+        .finally(() => {
+          this.loading.savingSearch = false
+        })
     },
 
     removeSearchQuery(searchQuery) {
@@ -539,23 +566,25 @@ export default {
       })
     },
 
-    onFieldChanged({ entry, fieldName, value }) {
+    async onFieldChanged({ entry, fieldName, value }) {
       const data = {
         id: entry.id,
-        description: entry.description
+        description: entry.description,
+        [fieldName]: value
       }
-      data[fieldName] = value
-      this.editEpisode(data)
+      await this.editEpisode(data)
+      this.onSearchChange(false)
     },
 
-    onMetadataChanged({ entry, descriptor, value }) {
-      const metadata = {}
-      metadata[descriptor.field_name] = value
+    async onMetadataChanged({ entry, descriptor, value }) {
       const data = {
         id: entry.id,
-        data: metadata
+        data: {
+          [descriptor.field_name]: value
+        }
       }
-      this.editEpisode(data)
+      await this.editEpisode(data)
+      this.onSearchChange(false)
     },
 
     onEditClicked(episode) {
@@ -577,6 +606,7 @@ export default {
           .then(() => {
             this.loading.edit = false
             this.modals.isNewDisplayed = false
+            this.onSearchChange(false)
           })
           .catch(err => {
             console.error(err)
@@ -601,9 +631,8 @@ export default {
       const episode = this.episodeToDelete
       if (episode) {
         return this.$t('episodes.delete_text', { name: episode.name })
-      } else {
-        return ''
       }
+      return ''
     }
   },
 
@@ -629,7 +658,7 @@ export default {
       if (!this.isEpisodesLoading) {
         let searchQuery = ''
         if (this.$route.query.search && this.$route.query.search.length > 0) {
-          searchQuery = '' + this.$route.query.search
+          searchQuery = `${this.$route.query.search}`
         }
         this.initialLoading = false
         this.$refs['episode-search-field'].setValue(searchQuery)

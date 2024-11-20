@@ -31,18 +31,21 @@
       :default-height="defaultHeight"
       :full-screen="isFullScreen"
       :is-comparing="isComparing"
+      :is-comparison-overlay="isComparisonOverlay"
       :is-hd="isHd"
       :is-muted="isMuted"
       :is-repeating="isRepeating"
       :light="isLight"
+      :current-frame="currentFrame"
+      :nb-frames="nbFrames"
       :panzoom="true"
       :preview="preview"
-      @size-changed="dimensions => $emit('size-changed', dimensions)"
-      @video-loaded="$emit('video-loaded')"
       @duration-changed="duration => $emit('duration-changed', duration)"
       @frame-update="frameNumber => $emit('frame-update', frameNumber)"
       @play-ended="$emit('play-ended')"
+      @size-changed="onVideoSizeChanged"
       @video-end="$emit('video-end')"
+      @video-loaded="$emit('video-loaded')"
       v-show="isMovie"
     />
 
@@ -52,21 +55,23 @@
       :default-height="defaultHeight"
       :full-screen="isFullScreen"
       :is-comparing="isComparing"
+      :is-comparison-overlay="isComparisonOverlay"
       :light="isLight"
       :margin-bottom="marginBottom"
       :panzoom="true"
       :preview="preview"
-      @size-changed="dimensions => $emit('size-changed', dimensions)"
+      @size-changed="onPictureSizeChanged"
       v-show="isPicture"
     />
 
     <object-viewer
       class="model-viewer"
-      :background-url="isObjectBackground ? objectBackgroundUrl : undefined"
+      :background-url="backgroundUrl"
       :default-height="defaultHeight"
       :empty="!is3DModel"
       :full-screen="isFullScreen"
       :is-environment-skybox="isEnvironmentSkybox"
+      :is-wireframe="isWireframe"
       :light="isLight"
       :preview-url="originalPath"
       v-if="is3DModel"
@@ -80,13 +85,6 @@
       @play-ended="$emit('play-ended')"
       v-show="isSound"
     />
-
-    <!--pdf
-      class="pdf-viewer"
-      :height="defaultHeight"
-      :src="originalPath"
-      v-if="isPdf"
-    /-->
 
     <div class="center" :style="{ height: defaultHeight + 'px' }" v-if="isFile">
       <a
@@ -105,27 +103,25 @@
 </template>
 
 <script>
-// import pdf from 'vue-pdf'
-import { mapGetters, mapActions } from 'vuex'
-import { formatFrame, formatTime } from '@/lib/video'
+import { DownloadIcon } from 'lucide-vue'
 
+import { formatFrame, formatTime } from '@/lib/video'
 import { domMixin } from '@/components/mixins/dom'
 
-import { DownloadIcon } from 'vue-feather-icons'
-import ObjectViewer from '@/components/previews/ObjectViewer'
-import PictureViewer from '@/components/previews/PictureViewer'
-import SoundViewer from '@/components/previews/SoundViewer'
-import Spinner from '@/components/widgets/Spinner'
-import VideoViewer from '@/components/previews/VideoViewer'
+import ObjectViewer from '@/components/previews/ObjectViewer.vue'
+import PictureViewer from '@/components/previews/PictureViewer.vue'
+import SoundViewer from '@/components/previews/SoundViewer.vue'
+import Spinner from '@/components/widgets/Spinner.vue'
+import VideoViewer from '@/components/previews/VideoViewer.vue'
 
 export default {
   name: 'preview-viewer',
+
   mixins: [domMixin],
 
   components: {
-    ObjectViewer,
-    // pdf,
     DownloadIcon,
+    ObjectViewer,
     PictureViewer,
     SoundViewer,
     Spinner,
@@ -141,7 +137,15 @@ export default {
       type: Number,
       default: 0
     },
+    currentFrame: {
+      type: Number,
+      default: 0
+    },
     marginBottom: {
+      type: Number,
+      default: 0
+    },
+    nbFrames: {
       type: Number,
       default: 0
     },
@@ -153,11 +157,19 @@ export default {
       type: Boolean,
       default: false
     },
+    isEnvironmentSkybox: {
+      type: Boolean,
+      default: false
+    },
     isFullScreen: {
       type: Boolean,
       default: false
     },
     isHd: {
+      type: Boolean,
+      default: false
+    },
+    isComparisonOverlay: {
       type: Boolean,
       default: false
     },
@@ -177,6 +189,10 @@ export default {
       type: Boolean,
       default: false
     },
+    isWireframe: {
+      type: Boolean,
+      default: false
+    },
     objectBackgroundUrl: {
       type: String,
       default: ''
@@ -184,24 +200,10 @@ export default {
     preview: {
       type: Object,
       default: () => {}
-    },
-    isEnvironmentSkybox: {
-      type: Boolean,
-      default: false
     }
   },
 
-  data() {
-    return {}
-  },
-
-  mounted() {},
-
-  beforeDestroy() {},
-
   computed: {
-    ...mapGetters(['currentProduction']),
-
     // Elements
 
     container() {
@@ -221,6 +223,10 @@ export default {
     },
 
     //  Utils
+
+    backgroundUrl() {
+      return this.isObjectBackground ? this.objectBackgroundUrl : undefined
+    },
 
     fileTitle() {
       return this.preview
@@ -302,7 +308,6 @@ export default {
   },
 
   methods: {
-    ...mapActions(['updateRevisionPreviewPosition']),
     formatFrame,
     formatTime,
 
@@ -364,6 +369,14 @@ export default {
 
     // Sizing
 
+    getNaturalDimensions() {
+      if (this.isMovie) {
+        return this.videoViewer.getNaturalDimensions()
+      } else {
+        return this.pictureViewer.getNaturalDimensions()
+      }
+    },
+
     getDimensions() {
       const dimensions = { width: 0, height: 0 }
       if (this.container) {
@@ -373,18 +386,24 @@ export default {
       return dimensions
     },
 
-    resetPicture() {
-      if (this.pictureViewer) this.pictureViewer.resetPicture()
-    },
-
     resize() {
-      if (this.pictureViewer) this.pictureViewer.resetPicture()
-      if (this.videoViewer) this.videoViewer.mountVideo()
-      if (this.isSound) this.soundViewer.redraw()
+      if (this.isPicture) this.pictureViewer?.resetPicture()
+      else if (this.isMovie) this.videoViewer?.mountVideo()
+      else if (this.isSound) this.soundViewer?.redraw()
     },
 
     setCurrentFrame(frameNumber) {
       this.videoViewer.setCurrentFrame(frameNumber)
+    },
+
+    onPictureSizeChanged(dimensions) {
+      dimensions.source = 'picture'
+      this.$emit('size-changed', dimensions)
+    },
+
+    onVideoSizeChanged(dimensions) {
+      dimensions.source = 'movie'
+      this.$emit('size-changed', dimensions)
     },
 
     // To use when you don't want to handle back pressure and rounding
@@ -427,6 +446,24 @@ export default {
       }
       if (this.videoViewer) {
         this.videoViewer.resetPanZoom()
+      }
+    },
+
+    pauseZoom() {
+      if (this.pictureViewer) {
+        this.pictureViewer.pausePanZoom()
+      }
+      if (this.videoViewer) {
+        this.videoViewer.pausePanZoom()
+      }
+    },
+
+    resumeZoom() {
+      if (this.pictureViewer) {
+        this.pictureViewer.resumePanZoom()
+      }
+      if (this.videoViewer) {
+        this.videoViewer.resumePanZoom()
       }
     }
   },

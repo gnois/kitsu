@@ -184,6 +184,7 @@ const initialState = {
   episodeValidationColumns: [],
   isEpisodeDescription: false,
   isEpisodeEstimation: false,
+  isEpisodeResolution: false,
   isEpisodeTime: false,
   isEpisodesLoading: false,
   isEpisodesLoadingError: false,
@@ -213,6 +214,7 @@ const getters = {
   displayedEpisodesEstimation: state => state.displayedEpisodesEstimation,
   displayedEpisodesTimeSpent: state => state.displayedEpisodesTimeSpent,
   isEpisodeDescription: state => state.isEpisodeDescription,
+  isEpisodeResolution: state => state.isEpisodeResolution,
   isEpisodeEstimation: state => state.isEpisodeEstimation,
   isEpisodeTime: state => state.isEpisodeTime,
 
@@ -307,32 +309,27 @@ const actions = {
   },
 
   saveEpisodeSearch({ commit, rootGetters }, searchQuery) {
-    const query = state.episodeSearchQueries.find(
-      query => query && query.name === searchQuery
-    )
-    const production = rootGetters.currentProduction
-    if (!query) {
-      return peopleApi
-        .createFilter(
-          'episode',
-          searchQuery,
-          searchQuery,
-          production.id,
-          'Episode'
-        )
-        .then(query => {
-          commit(ADD_EPISODE_SEARCH, query)
-          return Promise.resolve(query)
-        })
-    } else {
-      return Promise.resolve()
+    if (state.episodeSearchQueries.some(query => query.name === searchQuery)) {
+      return
     }
+    const production = rootGetters.currentProduction
+    return peopleApi
+      .createFilter(
+        'episode',
+        searchQuery,
+        searchQuery,
+        production.id,
+        'Episode'
+      )
+      .then(searchQuery => {
+        commit(ADD_EPISODE_SEARCH, searchQuery)
+        return searchQuery
+      })
   },
 
-  removeEpisodeSearch({ commit, rootGetters }, searchQuery) {
+  removeEpisodeSearch({ commit }, searchQuery) {
     return peopleApi.removeFilter(searchQuery).then(() => {
       commit(REMOVE_EPISODE_SEARCH, searchQuery)
-      return Promise.resolve()
     })
   },
 
@@ -458,11 +455,12 @@ const actions = {
 
   loadEpisodeStats({ commit, rootGetters }, productionId) {
     const taskTypeMap = rootGetters.taskTypeMap
-    commit(SET_EPISODE_STATS, { episodeStats: {}, taskTypeMap })
+    const production = rootGetters.currentProduction
+    commit(SET_EPISODE_STATS, { episodeStats: {}, taskTypeMap, production })
     return shotsApi
       .getEpisodeStats(productionId)
       .then(episodeStats => {
-        commit(SET_EPISODE_STATS, { episodeStats, taskTypeMap })
+        commit(SET_EPISODE_STATS, { episodeStats, taskTypeMap, production })
         return Promise.resolve(episodeStats)
       })
       .catch(console.error)
@@ -595,12 +593,14 @@ const mutations = {
     let isDescription = false
     let isTime = false
     let isEstimation = false
+    let isResolution = false
     state.episodeMap = new Map()
     episodes.forEach(episode => {
       const taskIds = []
       const validations = new Map()
       let timeSpent = 0
       let estimation = 0
+      episode.project_id = production.id
       episode.project_name = production.name
       episode.production_id = production.id
       episode.full_name = episode.name
@@ -637,6 +637,7 @@ const mutations = {
       if (!isTime && episode.timeSpent > 0) isTime = true
       if (!isEstimation && episode.estimation > 0) isEstimation = true
       if (!isDescription && episode.description) isDescription = true
+      if (!isResolution && episode.data.resolution) isResolution = true
 
       state.episodeMap.set(episode.id, episode)
     })
@@ -659,6 +660,7 @@ const mutations = {
     state.isEpisodeTime = isTime
     state.isEpisodeEstimation = isEstimation
     state.isEpisodeDescription = isDescription
+    state.isEpisodeResolution = isResolution
 
     state.isEpisodesLoading = false
     state.isEpisodesLoadingError = false
@@ -744,6 +746,9 @@ const mutations = {
     state.episodeIndex = buildEpisodeIndex(state.episodes)
     if (episode.description && !state.isEpisodeDescription) {
       state.isEpisodeDescription = true
+    }
+    if (episode.resolution && !state.isEpisodeResolution) {
+      state.isEpisodeResolution = true
     }
   },
 
@@ -838,7 +843,8 @@ const mutations = {
   ) {
     state.episodeValidationColumns = helpers.sortStatColumns(
       episodeRetakeStats,
-      taskTypeMap
+      taskTypeMap,
+      production
     )
     state.episodeRetakeStats = episodeRetakeStats
   },
@@ -875,6 +881,17 @@ const mutations = {
   },
 
   [REMOVE_SELECTED_TASK](state, validationInfo) {
+    if (
+      !validationInfo.x &&
+      validationInfo.task?.column &&
+      state.episodeMap.get(validationInfo.task.entity.id)
+    ) {
+      const entity = validationInfo.task.entity
+      const taskType = validationInfo.task.column
+      const list = state.displayedEpisodes.flat()
+      validationInfo.x = list.findIndex(e => e.id === entity.id)
+      validationInfo.y = state.episodeValidationColumns.indexOf(taskType.id)
+    }
     if (
       state.episodeSelectionGrid[0] &&
       state.episodeSelectionGrid[validationInfo.x]

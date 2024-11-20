@@ -7,6 +7,9 @@
             <th scope="col" class="name datatable-row-header">
               {{ $t('productions.fields.name') }}
             </th>
+            <th scope="col" class="code">
+              {{ $t('productions.fields.code') }}
+            </th>
             <th scope="col" class="type">
               {{ $t('productions.fields.type') }}
             </th>
@@ -31,39 +34,55 @@
               </span>
             </th>
           </tr>
-          <tr
-            class="datatable-row"
-            v-for="entry in openProductions"
-            :key="entry.id"
-          >
-            <th class="name datatable-row-header" scope="row">
-              <production-name-cell
-                :with-avatar="true"
-                :entry="entry"
-                :last-production-screen="lastProductionScreen"
+          <template v-for="entry in openProductions">
+            <tr class="datatable-row" :key="entry.id">
+              <th class="name datatable-row-header" scope="row">
+                <production-name-cell
+                  :with-avatar="true"
+                  :entry="entry"
+                  :last-production-screen="lastProductionScreen"
+                />
+              </th>
+              <td class="code">
+                {{ entry.code }}
+              </td>
+              <td class="type">
+                {{ $t(`productions.type.${entry.production_type || 'short'}`) }}
+              </td>
+              <td class="style">
+                {{
+                  $t(
+                    `productions.style.${
+                      getProductionStyleLabel(entry.production_style) || '2d3d'
+                    }`
+                  )
+                }}
+              </td>
+              <td class="fps">
+                {{ entry.fps }}
+              </td>
+              <td class="ratio">
+                {{ entry.ratio }}
+              </td>
+              <td class="resolution">
+                {{ entry.resolution }}
+              </td>
+              <row-actions-cell
+                :entry-id="entry.id"
+                @edit-clicked="$emit('edit-clicked', entry)"
+                :hide-delete="true"
               />
-            </th>
-            <td class="type">
-              {{ $t('productions.type.' + (entry.production_type || 'short')) }}
-            </td>
-            <td class="style">
-              {{ $t('productions.style.' + (entry.production_style || '3d')) }}
-            </td>
-            <td class="fps">
-              {{ entry.fps }}
-            </td>
-            <td class="ratio">
-              {{ entry.ratio }}
-            </td>
-            <td class="resolution">
-              {{ entry.resolution }}
-            </td>
-            <row-actions-cell
-              :entry-id="entry.id"
-              @edit-clicked="$emit('edit-clicked', entry)"
-              :hide-delete="true"
-            />
-          </tr>
+            </tr>
+            <tr
+              class="datatable-row"
+              :key="entry.id + '-stats'"
+              v-if="Object.keys(productionStats).length > 0"
+            >
+              <td :colspan="7" class="datatable-row-stats">
+                <production-stats :stats="productionStatsMap[entry.id] || {}" />
+              </td>
+            </tr>
+          </template>
         </tbody>
         <tbody v-if="closedProductions.length > 0">
           <tr class="datatable-type-header">
@@ -86,11 +105,20 @@
                 :is-link="false"
               />
             </th>
+            <td class="code">
+              {{ entry.code }}
+            </td>
             <td class="type">
-              {{ $t('productions.type.' + (entry.production_type || 'short')) }}
+              {{ $t(`productions.type.${entry.production_type || 'short'}`) }}
             </td>
             <td class="style">
-              {{ $t('productions.style.' + (entry.production_style || '3d')) }}
+              {{
+                $t(
+                  `productions.style.${
+                    getProductionStyleLabel(entry.production_style) || '2d3d'
+                  }`
+                )
+              }}
             </td>
             <td class="fps">
               {{ entry.fps }}
@@ -120,10 +148,14 @@
 </template>
 
 <script>
-import { mapGetters, mapActions } from 'vuex'
-import ProductionNameCell from '@/components/cells/ProductionNameCell'
-import RowActionsCell from '@/components/cells/RowActionsCell'
-import TableInfo from '@/components/widgets/TableInfo'
+import { mapGetters } from 'vuex'
+
+import { PRODUCTION_STYLE_OPTIONS } from '@/lib/productions'
+
+import ProductionNameCell from '@/components/cells/ProductionNameCell.vue'
+import ProductionStats from '@/components/pages/production/ProductionStats.vue'
+import RowActionsCell from '@/components/cells/RowActionsCell.vue'
+import TableInfo from '@/components/widgets/TableInfo.vue'
 
 export default {
   name: 'production-list',
@@ -132,6 +164,10 @@ export default {
     entries: {
       type: Array,
       default: () => []
+    },
+    productionStats: {
+      type: Object,
+      default: () => {}
     },
     isError: {
       type: Boolean,
@@ -143,12 +179,9 @@ export default {
     }
   },
 
-  data() {
-    return {}
-  },
-
   components: {
     ProductionNameCell,
+    ProductionStats,
     RowActionsCell,
     TableInfo
   },
@@ -158,12 +191,14 @@ export default {
 
     closedProductions() {
       return this.entries.filter(p => p.project_status_name === 'Closed')
+    },
+
+    productionStatsMap() {
+      return this.productionStats
     }
   },
 
   methods: {
-    ...mapActions([]),
-
     // Convert a database status to a locale key.
     getStatusLocale(originalStatus) {
       const statusMap = {
@@ -172,6 +207,11 @@ export default {
         Closed: 'productions.status.closed'
       }
       return statusMap[originalStatus]
+    },
+
+    getProductionStyleLabel(value) {
+      return PRODUCTION_STYLE_OPTIONS.find(style => style.value === value)
+        ?.label
     }
   }
 }

@@ -23,6 +23,7 @@
         :maxlength="maxlength"
         :min="min"
         :max="max || undefined"
+        :required="required"
         :step="step || 'any'"
         :readonly="readonly"
         @input="updateValue()"
@@ -35,6 +36,9 @@
       >
         {{ buttonLabel }}
       </button>
+    </p>
+    <p class="error" v-if="errored">
+      {{ errorText }}
     </p>
   </div>
 </template>
@@ -93,11 +97,19 @@ export default {
       default: false,
       type: Boolean
     },
+    errorText: {
+      default: '',
+      type: String
+    },
     emptyLabel: {
       default: false,
       type: Boolean
     },
     readonly: {
+      default: false,
+      type: Boolean
+    },
+    required: {
       default: false,
       type: Boolean
     }
@@ -123,6 +135,10 @@ export default {
 
     focus() {
       this.$refs.input.focus()
+    },
+
+    checkValidity() {
+      return this.$refs.input.checkValidity()
     }
   }
 }
@@ -158,8 +174,9 @@ input.input.thin {
   margin: 0;
 }
 
-button {
+.button {
   font-size: 1.2em;
+  margin-left: 0.5rem;
 }
 
 .input:invalid,
